@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node server/setEnv.js",
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",

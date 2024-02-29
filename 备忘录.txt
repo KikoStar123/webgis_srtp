@@ -11,3 +11,8 @@ http://120.92.142.115:81/vform3/   VUE3组件设计
 
 npm install 在项目目录获取所有相关依赖
 在这之前要安装node.js 和vue.js
+
+git add .
+git commit -m "提交信息"
+git push origin main  
+同步到github线上仓库

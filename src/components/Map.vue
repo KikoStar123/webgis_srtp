@@ -23,6 +23,7 @@ import maplibregl from 'maplibre-gl';
 import { ElSelect, ElOption } from 'element-plus';
 import 'element-plus/dist/index.css';
 
+
 config.apiKey = '8aGJnKohQXrQH0N10jZP';
 
 const mapContainer = shallowRef(null);
@@ -30,6 +31,7 @@ const map = shallowRef(null);
 const geojsonFiles = ref([]);//geojson文件列表（通过后端自定义api获取列表）
 const selectedGeoJSON = ref(''); //下拉列表
 const draggableSelect = ref(null);//拖动选择框
+const backendUrl = import.meta.env.VITE_BACKEND_URL;//调用全局分配的域名地址
 const layerConfigs = [// 图层配置
     {
         id: 'geojson-layer-fill',
@@ -64,7 +66,7 @@ onMounted(async() => {//构造函数
     try {
         /*调用server.js后端api读取geojson文件,
         运行之前在项目根目录使用终端运行：'node server/server.js' 以启动后端服务 */
-        const response = await fetch('http://localhost:3000/api/geojson-files');
+        const response = await fetch(`${backendUrl}/api/geojson-files`);
         if (!response.ok) {
             throw new Error('Failed to fetch geojson files');
         } else {
