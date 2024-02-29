@@ -1,18 +1,24 @@
-maptiler: https://docs.maptiler.com/vuejs/?key=lTQkunQ02dqv0BbCikBk&mapId=openstreetmap&_gl=1*si4x9z*_gcl_au*Mzg4ODIzNDAzLjE3MDg4NTAxMTg.*_ga*MjY0ODE5Mjg2LjE3MDg4NTAxMTk.*_ga_K4SXYBF4HT*MTcwODg1MDExOS4xLjEuMTcwODg1MTIzOC41NS4wLjA.
-api key: lTQkunQ02dqv0BbCikBk
-api 文档： https://docs.maptiler.com/sdk-js/api/map/
-npm run dev
-
+https://docs.maptiler.com/vuejs/     maptiler
+https://docs.maptiler.com/sdk-js/api/map/    api 文档
 https://element-plus.org/     element_plus素材网
-npm run serve 运行根项目
 https://geojsonlint.com/ 在线geojson检测工具
 https://cloud.maptiler.com/maps/    maptilerAPI管理
 http://120.92.142.115:81/vform3/   VUE3组件设计
 
+使用步骤
+安装node.js 和vue.js
+git clone '本项目的url'
 npm install 在项目目录获取所有相关依赖
-在这之前要安装node.js 和vue.js
+npm start 运行项目（可以在packge.json的script里设置）
 
+同步到github线上仓库
+在webgis_srtp文件夹下操作！！！cd webgis_srtp
+git init
 git add .
 git commit -m "提交信息"
+git remote add origin 'github的url'
 git push origin main  
-同步到github线上仓库
+
+
+
+
