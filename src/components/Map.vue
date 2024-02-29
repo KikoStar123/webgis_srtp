@@ -63,17 +63,16 @@ onMounted(async() => {//构造函数
         zoom: initialState.zoom
     });
 
+    /*调用server.js后端api读取geojson文件,
+    运行之前在项目根目录使用终端运行：'node server/server.js' 以启动后端服务 */
     try {
-        /*调用server.js后端api读取geojson文件,
-        运行之前在项目根目录使用终端运行：'node server/server.js' 以启动后端服务 */
+        // 注意这里对 fetch URL 的修改
         const response = await fetch(`${backendUrl}/api/geojson-files`);
         if (!response.ok) {
             throw new Error('Failed to fetch geojson files');
-        } else {
-            console.log('GeoJSON files loaded successfully');
         }
         const files = await response.json();
-        geojsonFiles.value = files; // 更新geojson文件列表
+        geojsonFiles.value = files;
     } catch (error) {
         console.error('Error fetching geojson files: ', error);
     }
