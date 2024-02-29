@@ -1,4 +1,4 @@
-//vercle
+//vercle适配
 import { geojsonFilesHandler } from '../server/geojsonFilesHandler.js';
 
 export default function(req, res) {
@@ -14,6 +14,5 @@ export default function(req, res) {
         return;
     }
 
-    // 对于非OPTIONS请求，调用你的处理函数
     return geojsonFilesHandler(req, res);
 }
