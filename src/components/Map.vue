@@ -4,10 +4,10 @@
         <div class="draggable-select" ref="draggableSelect">
             <ElSelect v-model="selectedGeoJSON" @change="locateGeoJSON" class="geojson-selector" placeholder="请选择GeoJSON文件">
                 <ElOption
-                    v-for="file in geojsonFiles"
-                    :key="file"
-                    :label="file"
-                    :value="file">
+                    v-for="fileObj in geojsonFiles"
+                    :key="fileObj.geojson"
+                    :label="fileObj.geojson"
+                    :value="fileObj.geojson">
                 </ElOption>
             </ElSelect>
         </div>
@@ -28,7 +28,7 @@ config.apiKey = '8aGJnKohQXrQH0N10jZP';
 
 const mapContainer = shallowRef(null);
 const map = shallowRef(null);
-const geojsonFiles = ref([]);//geojson文件列表（通过后端自定义api获取列表）
+const geojsonFiles = ref([]);//存储对象数组
 const selectedGeoJSON = ref(''); //下拉列表
 const draggableSelect = ref(null);//拖动选择框
 const backendUrl = import.meta.env.VITE_BACKEND_URL;//调用全局分配的域名地址
@@ -66,25 +66,42 @@ onMounted(async() => {//构造函数
     /*调用server.js后端api读取geojson文件,
     运行之前在项目根目录使用终端运行：'node server/server.js' 以启动后端服务 */
     try {
-        // 注意这里对 fetch URL 的修改
-        const response = await fetch(`${backendUrl}/api/geojson-files`);
+        const response = await fetch(`${backendUrl}/api/geojson-files/Nanjing`);
         if (!response.ok) {
-            throw new Error('Failed to fetch geojson files');
+            throw new Error('Failed to fetch geojson and csv files');
         }
-        const files = await response.json();
-        geojsonFiles.value = files;
+        const directories = await response.json();
+
+        // 处理返回的数据，为每个.geojson文件和对应的.csv文件创建一个对象
+        geojsonFiles.value = directories.flatMap(dir =>
+            dir.files.filter(file => file.endsWith('.geojson')).map(geojsonFile => ({
+                geojson: geojsonFile,
+                csv: dir.files.find(csvFile => csvFile === geojsonFile.replace('.geojson', '站点信息.csv')),
+                directory: dir.directory // 存储目录名称
+            }))
+        );
+
+        // 地图加载完成后，为每个geojson文件添加图层
+        map.value.on('load', () => {
+            geojsonFiles.value.forEach(async (fileObj) => {
+                const geojsonUrl = `${backendUrl}/static/city/Nanjing/${fileObj.directory}/${fileObj.geojson}`;
+                try {
+                    const geojsonResponse = await fetch(geojsonUrl);
+                    if (!geojsonResponse.ok) {
+                        throw new Error(`Failed to fetch GeoJSON data from ${geojsonUrl}`);
+                    }
+                    const geojsonData = await geojsonResponse.json();
+                    // 使用geojsonData添加地图图层
+                    addGeoJSONToMap(geojsonData, fileObj.geojson);
+                } catch (error) {
+                    console.error(`Error loading GeoJSON from ${fileObj.geojson}:`, error);
+                }
+            });
+        });
     } catch (error) {
-        console.error('Error fetching geojson files: ', error);
+        console.error('Error fetching geojson and csv files:', error);
     }
 
-    map.value.on('load', () => {
-        geojsonFiles.value.forEach((filename) => {
-            fetch(`./geojson/${filename}`)
-                .then((response) => response.json())
-                .then((data) => addGeoJSONToMap(data, filename))
-                .catch((error) => console.error(`Error loading GeoJSON from ${filename}:`, error));
-        });
-    });
 
     let isDragging = false;
     let offsetX = 0;
@@ -179,36 +196,59 @@ const locateGeoJSON = async () => {//定位区域函数
 
 
 const addGeoJSONToMap = (geojsonData, sourceId) => {
+    if (!map.value) return;
+
     map.value.addSource(sourceId, {
         type: 'geojson',
         data: geojsonData
     });
 
     layerConfigs.forEach(config => {
-        // source为当前的sourceId
         const layerConfig = { ...config, source: sourceId, id: `${sourceId}-${config.id}` };
-        map.value.addLayer(layerConfig);//从之前的layerConfig数组加载配置信息
+        map.value.addLayer(layerConfig);
 
-        // 设置鼠标悬停和点击事件的逻辑
         if (config.type === 'fill') {
             map.value.on('mouseenter', layerConfig.id, () => {
-                map.value.setPaintProperty(layerConfig.id, 'fill-color', '#B22222'); // 颜色变深
+                map.value.setPaintProperty(layerConfig.id, 'fill-color', '#B22222');
                 map.value.getCanvas().style.cursor = 'pointer';
             });
             map.value.on('mouseleave', layerConfig.id, () => {
-                map.value.setPaintProperty(layerConfig.id, 'fill-color', config.paint['fill-color']); // 恢复原始颜色
+                map.value.setPaintProperty(layerConfig.id, 'fill-color', config.paint['fill-color']);
                 map.value.getCanvas().style.cursor = '';
             });
-            map.value.on('click', layerConfig.id, (e) => {
-                const filenameWE = sourceId.split('.').slice(0, -1).join('.'); // 移除文件后缀
-                new maplibregl.Popup()
-                    .setLngLat(e.lngLat)
-                    .setHTML(`<p>${filenameWE}</p>`)
-                    .addTo(map.value);
+            map.value.on('click', layerConfig.id, async (e) => {
+                // 寻找与当前GeoJSON相关联的CSV文件路径
+                const fileObj = geojsonFiles.value.find(item => item.geojson === sourceId);
+                if (fileObj && fileObj.csv) {
+                    // 确保构建正确的CSV文件访问URL
+                    const csvUrl = `${backendUrl}/static/city/Nanjing/${fileObj.directory}/${fileObj.csv}`;
+                    try {
+                        const response = await fetch(csvUrl);
+                        if (!response.ok) throw new Error('Failed to fetch CSV data');
+                        const csvText = await response.text();
+
+                        // 显示CSV文本，实际应用中可能需要解析并以友好的格式展示
+                        new maplibregl.Popup()
+                            .setLngLat(e.lngLat)
+                            .setHTML(`<pre>${csvText}</pre>`)
+                            .addTo(map.value);
+                    } catch (error) {
+                        console.error('Error loading or displaying CSV data:', error);
+                    }
+                } else {
+                    // 若没有找到CSV文件，仅显示GeoJSON文件名
+                    const filenameWE = sourceId.split('.').slice(0, -1).join('.');
+                    new maplibregl.Popup()
+                        .setLngLat(e.lngLat)
+                        .setHTML(`<p>${filenameWE}</p>`)
+                        .addTo(map.value);
+                }
             });
         }
     });
 };
+
+
 
 </script>
 
