@@ -1,0 +1,10 @@
+{
+    "version": 2,
+    "routes": [
+    {
+        "src": "/api/geojson-files/(.*)",
+        "dest": "/api/geojson-files?cityName=$1",
+        "methods": ["GET"]
+    }
+    ]
+}
