@@ -5,6 +5,10 @@
         "src": "/api/geojson-files/(.*)",
         "dest": "/api/geojson-files?cityName=$1",
         "methods": ["GET"]
+    },
+    {
+        "src": "/static/(.*)",
+        "dest": "/$1"
     }
     ]
 }
