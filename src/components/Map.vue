@@ -33,14 +33,14 @@ const selectedGeoJSON = ref(''); //下拉列表
 const draggableSelect = ref(null);//拖动选择框
 const backendUrl = import.meta.env.VITE_BACKEND_URL;//调用全局分配的域名地址
 const layerCsvContentMap = new window.Map();//全局csv描述信息存储Map
-const layerConfigs = [// 图层配置
+const layerConfigs = [//图层配置
     {
         id: 'geojson-layer-fill',
         type: 'fill',
         source: 'geojson',
         paint: {
-            'fill-color': '#FF0000', // 默认填充颜色为红色
-            'fill-opacity': 0.4
+            'fill-color': '#90EE90', // 浅绿色
+            'fill-opacity': 0.4    // 透明度
         }
     },
     {
@@ -48,11 +48,13 @@ const layerConfigs = [// 图层配置
         type: 'line',
         source: 'geojson',
         paint: {
-            'line-color': '#B30000', // 默认边框颜色为黑色
-            'line-width': 2
+            'line-color': '#006400', // 深绿色
+            'line-width': 2,
+            'line-opacity': 0.5     // 透明度
         }
     }
 ];
+
 
 
 onMounted(async() => {//构造函数
@@ -112,7 +114,7 @@ onUnmounted(() => {//析构函数
     map.value?.remove();
 });
 
-
+//选择框的拖动逻辑
 function initDraggableSelect() {
     let isDragging = false;
     let offsetX = 0;
@@ -286,6 +288,7 @@ async function addGeoJSONLayers(geojsonData, sourceId) {
                     const features = map.value.queryRenderedFeatures(e.point, { layers: [`${sourceId}-points-layer`] });
                     if (features.length > 0) {
                         layerConfigs.forEach(config => {
+                            //shakeIconAnimation(`${sourceId}-points-layer`, 0.12, 0.24, 0.03, 500);
                             const targetLayerId = `${sourceId}-${config.id}`;
                             toggleLayerVisibility(targetLayerId);
                         });
@@ -357,7 +360,6 @@ function formatCSVAsHTML(csvText) {
 }
 
 
-
 //PointLayer点击实现逻辑
 function addClickEventForPointsLayer(layerId, sourceId) {
     map.value.on('click', layerId, (e) => {
@@ -369,31 +371,114 @@ function addClickEventForPointsLayer(layerId, sourceId) {
     });
 }
 
-
+//控制显示或者隐藏函数
 function toggleLayerVisibility(layerId) {
-    const visibility = map.value.getLayoutProperty(layerId, 'visibility');
-    map.value.setLayoutProperty(layerId, 'visibility', visibility === 'visible' ? 'none' : 'visible');
-}
+    if (!map.value) return;
 
-function toggleLayerVisibility_(layerId) {
-    // 检查图层是否存在
-    if (!map.value.getLayer(layerId)) {
-        console.error(`Layer "${layerId}" does not exist.`);
+    // 获取图层类型
+    const layerType = map.value.getLayer(layerId).type;
+    const opacityProperty = layerType === 'fill' ? 'fill-opacity' : (layerType === 'line' ? 'line-opacity' : null);
+
+    // 如果图层类型不是预期的（非填充或线图层），则不执行操作
+    if (!opacityProperty) {
+        console.error(`图层 "${layerId}" 类型不是填充或线图层。`);
         return;
     }
 
+    // 获取当前图层的可见性状态
     const visibility = map.value.getLayoutProperty(layerId, 'visibility');
+    const currentOpacity = map.value.getPaintProperty(layerId, opacityProperty);
 
-    // 输出当前图层的可见性状态，以便调试
-    console.log(`Current visibility of "${layerId}": ${visibility}`);
-
-    // 如果图层当前不可见，则将其设置为可见，反之亦然
-    if (visibility === 'visible') {
-        map.value.setLayoutProperty(layerId, 'visibility', 'none');
-    } else {
+    if (visibility === 'visible' && currentOpacity > 0) {
+        // 如果图层当前可见且不透明，则开始隐藏动画
+        changeLayerOpacity(layerId, 0.4, 0, layerType);
+    } else if (visibility !== 'visible' || currentOpacity === 0) {
+        // 如果图层当前不可见或完全透明，则设置为可见并开始显示动画
         map.value.setLayoutProperty(layerId, 'visibility', 'visible');
+        changeLayerOpacity(layerId, 0, 0.4, layerType);
     }
 }
+
+//实现透明度变化动画的函数
+function changeLayerOpacity(layerId, startOpacity, endOpacity, layerType, duration = 500) {
+    const opacityProperty = layerType === 'fill' ? 'fill-opacity' : 'line-opacity';
+    
+    // 确保动画开始前图层可见
+    if (startOpacity < endOpacity) {
+        map.value.setLayoutProperty(layerId, 'visibility', 'visible');
+    }
+
+    const step = (endOpacity - startOpacity) / (duration / 10);
+    let currentOpacity = startOpacity;
+
+    function stepFunction() {
+        if ((step > 0 && currentOpacity < endOpacity) || (step < 0 && currentOpacity > endOpacity)) {
+            currentOpacity += step;
+            // 使用 Math.max 确保透明度不小于 0
+            const safeOpacity = Math.max(0, currentOpacity);
+            map.value.setPaintProperty(layerId, opacityProperty, safeOpacity);
+            requestAnimationFrame(stepFunction);
+        } else {
+            // 动画结束，确保透明度不小于 0
+            const finalOpacity = Math.max(0, endOpacity);
+            map.value.setPaintProperty(layerId, opacityProperty, finalOpacity);
+            if (endOpacity === 0) {
+                map.value.setLayoutProperty(layerId, 'visibility', 'none');
+            }
+        }
+    }
+
+    stepFunction();
+}
+
+//实现图标抖动动画的函数
+// function shakeIconAnimation(layerId, startSize, endSize, step, duration) {
+//     if (!map.value) {
+//         console.error("Map instance is not initialized.");
+//         return;
+//     }
+
+//     let currentSize = startSize;
+//     let growing = true;
+//     const startTime = performance.now();
+
+//     function animate(time) {
+//         if (!map.value) {
+//             // 如果此时地图实例不存在了，就停止动画
+//             console.error("Map instance is not available.");
+//             return;
+//         }
+
+//         const elapsedTime = time - startTime;
+//         if (growing) {
+//             currentSize += step;
+//             if (currentSize >= endSize) {
+//                 growing = false;
+//                 currentSize -= step; // 开始缩小
+//             }
+//         } else {
+//             currentSize -= step;
+//             if (currentSize <= startSize) {
+//                 // 确保不会小于初始大小并结束动画
+//                 currentSize = startSize;
+//                 growing = true; // 重置状态以便下一次动画
+//                 map.value.setPaintProperty(layerId, 'icon-size', currentSize);
+//                 return; // 停止动画
+//             }
+//         }
+
+//         map.value.setPaintProperty(layerId, 'icon-size', currentSize);
+        
+//         if (elapsedTime < duration) {
+//             requestAnimationFrame(animate);
+//         } else {
+//             // 动画结束，确保图标大小恢复初始值
+//             map.value.setPaintProperty(layerId, 'icon-size', startSize);
+//         }
+//     }
+
+//     requestAnimationFrame(animate);
+// }
 
 
 
