@@ -33,6 +33,7 @@ const selectedGeoJSON = ref(''); //下拉列表
 const draggableSelect = ref(null);//拖动选择框
 const backendUrl = import.meta.env.VITE_BACKEND_URL;//调用全局分配的域名地址
 const layerCsvContentMap = new window.Map();//全局csv描述信息存储Map
+const lockedLayerId = ref(null); // 默认没有图层被锁定，用于存储图层锁定状态
 const layerConfigs = [//图层配置
     {
         id: 'geojson-layer-fill',
@@ -217,6 +218,15 @@ const locateGeoJSON = async () => {
                 zoom: 14.5,
                 essential: true
             });
+
+            // 遍历所有图层，调整可见性，但尊重锁定状态
+            layerConfigs.forEach(config => {
+                const layerId = `${fileObj.geojson}-${config.id}`;
+                // 仅当无图层被锁定或当前图层正被锁定时调整可见性
+                if (!lockedLayerId.value || lockedLayerId.value === layerId) {
+                    toggleLayerVisibility(layerId);
+                }
+            });
         } else {
             console.error(`无法定位到 ${selectedFilename}，因为中心坐标无效`);
         }
@@ -224,6 +234,7 @@ const locateGeoJSON = async () => {
         console.error(`Error locating ${selectedFilename}:`, error);
     }
 };
+
 
 
 async function addGeoJSONLayers(geojsonData, sourceId) {
@@ -302,7 +313,7 @@ async function addGeoJSONLayers(geojsonData, sourceId) {
                         layerConfigs.forEach(config => {
                             //shakeIconAnimation(`${sourceId}-points-layer`, 0.12, 0.24, 0.03, 500);
                             const targetLayerId = `${sourceId}-${config.id}`;
-                            toggleLayerVisibility(targetLayerId);
+                            toggleLayerVisibility(targetLayerId, true);
                         });
                     }
                 });
@@ -384,32 +395,40 @@ function addClickEventForPointsLayer(layerId, sourceId) {
 }
 
 //控制显示或者隐藏函数
-function toggleLayerVisibility(layerId) {
+function toggleLayerVisibility(layerId, isLocking = false) {
     if (!map.value) return;
 
-    // 获取图层类型
+    // 如果尝试操作的是被锁定的图层，并且这次操作不是来自锁定/解锁操作，则直接返回
+    if (lockedLayerId.value === layerId && !isLocking) {
+        console.log(`图层 "${layerId}" 当前被锁定，无法更改其可见性。`);
+        return;
+    }
+
     const layerType = map.value.getLayer(layerId).type;
     const opacityProperty = layerType === 'fill' ? 'fill-opacity' : (layerType === 'line' ? 'line-opacity' : null);
 
-    // 如果图层类型不是预期的（非填充或线图层），则不执行操作
     if (!opacityProperty) {
         console.error(`图层 "${layerId}" 类型不是填充或线图层。`);
         return;
     }
 
-    // 获取当前图层的可见性状态
     const visibility = map.value.getLayoutProperty(layerId, 'visibility');
     const currentOpacity = map.value.getPaintProperty(layerId, opacityProperty);
 
     if (visibility === 'visible' && currentOpacity > 0) {
-        // 如果图层当前可见且不透明，则开始隐藏动画
         changeLayerOpacity(layerId, 0.4, 0, layerType);
+        if (isLocking) {
+            lockedLayerId.value = null; // 解锁图层
+        }
     } else if (visibility !== 'visible' || currentOpacity === 0) {
-        // 如果图层当前不可见或完全透明，则设置为可见并开始显示动画
         map.value.setLayoutProperty(layerId, 'visibility', 'visible');
         changeLayerOpacity(layerId, 0, 0.4, layerType);
+        if (isLocking) {
+            lockedLayerId.value = layerId; // 锁定图层
+        }
     }
 }
+
 
 //实现透明度变化动画的函数
 function changeLayerOpacity(layerId, startOpacity, endOpacity, layerType, duration = 500) {
