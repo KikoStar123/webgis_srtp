@@ -55,7 +55,7 @@ const layerConfigs = [//图层配置
     }
 ];
 
-
+config.unit = 'metric'; // 比例尺公制单位
 
 onMounted(async() => {//构造函数
     const initialState = { lng: 116.2, lat: 39.5, zoom: 7 };
@@ -63,7 +63,17 @@ onMounted(async() => {//构造函数
         container: mapContainer.value,
         style: MapStyle.STREETS,
         center: [initialState.lng, initialState.lat],
-        zoom: initialState.zoom
+        zoom: initialState.zoom,
+        minimap: {
+            style: MapStyle.BASIC,
+            containerStyle: {
+                width: '200px',
+                height: '150px',
+                bottom: '10px',
+                right: '10px'
+            }
+        },
+        scaleControl: true //比例尺
     });
 
     /*调用server.js后端api读取geojson文件,
@@ -104,6 +114,8 @@ onMounted(async() => {//构造函数
     } catch (error) {
         console.error('Error fetching geojson and csv files:', error);
     }
+
+
 
     initDraggableSelect();//拖动选择框
 
@@ -280,7 +292,7 @@ async function addGeoJSONLayers(geojsonData, sourceId) {
                         'icon-size': 0.12,
                         'icon-anchor': 'bottom'
                     },
-                    minzoom: 10,
+                    minzoom: 7,
                 });
 
                 // 点击点图层控制非点图层的可见性
