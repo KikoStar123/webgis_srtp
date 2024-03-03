@@ -222,11 +222,20 @@ const locateGeoJSON = async () => {
             // 遍历所有图层，调整可见性，但尊重锁定状态
             layerConfigs.forEach(config => {
                 const layerId = `${fileObj.geojson}-${config.id}`;
-                // 仅当无图层被锁定或当前图层正被锁定时调整可见性
-                if (!lockedLayerId.value || lockedLayerId.value === layerId) {
+                const isLocked = lockedLayerId.value === layerId;
+
+                // 如果该图层被锁定，则显示它；否则，如果不是被选中的新图层，则隐藏它
+                if (isLocked || selectedFilename === fileObj.geojson) {
                     toggleLayerVisibility(layerId);
+                } else {
+                    toggleLayerVisibility(layerId); // 这里可以根据需要修改成隐藏图层的逻辑
                 }
             });
+
+            // 如果选中的新图层没有被锁定，则更新锁定状态为 null
+            if (lockedLayerId.value !== null && selectedFilename !== lockedLayerId.value.split('-')[0]) {
+                lockedLayerId.value = null;
+            }
         } else {
             console.error(`无法定位到 ${selectedFilename}，因为中心坐标无效`);
         }
@@ -234,6 +243,7 @@ const locateGeoJSON = async () => {
         console.error(`Error locating ${selectedFilename}:`, error);
     }
 };
+
 
 
 
