@@ -215,7 +215,7 @@ const locateGeoJSON = async () => {
         if (center) {
             map.value.flyTo({
                 center: center,
-                zoom: 14.5,
+                zoom: 13,
                 essential: true
             });
 
