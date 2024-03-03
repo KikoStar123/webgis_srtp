@@ -249,7 +249,7 @@ const locateGeoJSON = async () => {
 
 async function addGeoJSONLayers(geojsonData, sourceId) {
     if (!map.value) return;
-
+    let currentPopup; // 在函数作用域内维护当前弹窗的引用
     // 添加 GeoJSON 数据源
     map.value.addSource(sourceId, {
         type: 'geojson',
@@ -270,11 +270,15 @@ async function addGeoJSONLayers(geojsonData, sourceId) {
         if (config.type !== 'symbol') {
             map.value.on('contextmenu', layerConfig.id, (e) => {
                 e.preventDefault(); // 阻止默认的右键菜单事件
+                // 如果当前已经有一个弹窗，则关闭它
+                if (currentPopup) {
+                    currentPopup.remove();
+                }
                 const properties = e.features[0].properties; 
                 const coordinates = e.lngLat;
                 const layerId = `${sourceId}-${config.id}`;
                 const csvHtmlContent = layerCsvContentMap.get(layerId);
-                new maplibregl.Popup()
+                currentPopup =new maplibregl.Popup()
                     .setLngLat([coordinates.lng, coordinates.lat])
                     .setHTML(csvHtmlContent)
                     .addTo(map.value);
@@ -376,16 +380,26 @@ function parseCSVToGeoJSON(csvText) {
 }
 
 function formatCSVAsHTML(csvText) {
-    // 将CSV文本按行分割，并将每行分割成列
-    const rows = csvText.trim().split('\n').map(row => row.split(','));
+    // 按行分割CSV文本
+    const rows = csvText.trim().split('\n').map(row => {
+        // 处理每一行，考虑到被双引号包裹的字段
+        let match;
+        const cells = [];
+        const regex = /(".*?"|[^",]+)(,|$)/g; // 匹配被双引号包裹或不包含逗号的字段
+        while ((match = regex.exec(row)) !== null) {
+            // 删除字段两端的双引号（如果有）
+            let cell = match[1].replace(/^"|"$/g, '');
+            cells.push(cell);
+        }
+        return cells;
+    });
 
     // 转置行和列
-    // 如果 rows 是空的，转置结果也是空数组
-    const columns = rows[0] ? rows[0].map((col, i) => rows.map(row => row[i])) : [];
+    const columns = rows[0] ? rows[0].map((_, i) => rows.map(row => row[i])) : [];
 
     // 将每一列（现在是“行”）转换为HTML
     const htmlLines = columns.map(column => {
-        // 将每个元素用逗号和空格连接，然后用<p>标签包裹
+        // 将每个元素用冒号和空格连接，然后用<p>标签包裹
         return `<p>${column.join(':')}</p>`;
     }).join('');
 

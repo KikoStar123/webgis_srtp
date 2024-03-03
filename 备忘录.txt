@@ -4,6 +4,7 @@ https://element-plus.org/     element_plus素材网
 https://geojsonlint.com/ 在线geojson检测工具
 https://cloud.maptiler.com/maps/    maptilerAPI管理
 http://120.92.142.115:81/vform3/   VUE3组件设计
+dash.cloudflare.com  域名控制台
 
 使用步骤
 安装node.js 和vue.js
