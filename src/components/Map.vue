@@ -2,7 +2,12 @@
     <div class="map-wrap">
         <div class="map" ref="mapContainer"></div>
         <div class="draggable-select" ref="draggableSelect">
-            <ElSelect v-model="selectedGeoJSON" @change="locateGeoJSON" class="geojson-selector" placeholder="请选择地铁站">
+            <ElSelect 
+                v-model="selectedGeoJSON" 
+                @change="locateGeoJSON" 
+                class="geojson-selector" 
+                placeholder="请选择地铁站"
+                filterable>
                 <ElOption
                     v-for="fileObj in geojsonFiles"
                     :key="fileObj.geojson"
@@ -15,6 +20,7 @@
 </template>
 
 
+
 <script setup>
 import { Map, MapStyle, config } from '@maptiler/sdk';
 import { shallowRef, onMounted, onUnmounted, ref } from 'vue';
@@ -23,8 +29,8 @@ import maplibregl from 'maplibre-gl';
 import { ElSelect, ElOption } from 'element-plus';
 import 'element-plus/dist/index.css';
 
-
 config.apiKey = 'nMI0OagfwxzpRVopD5sR';
+config.unit = 'metric'; // 比例尺公制单位
 
 const mapContainer = shallowRef(null);
 const map = shallowRef(null);
@@ -55,8 +61,6 @@ const layerConfigs = [//图层配置
         }
     }
 ];
-
-config.unit = 'metric'; // 比例尺公制单位
 
 onMounted(async() => {//构造函数
     const initialState = { lng: 116.2, lat: 39.5, zoom: 7 };
@@ -115,8 +119,6 @@ onMounted(async() => {//构造函数
     } catch (error) {
         console.error('Error fetching geojson and csv files:', error);
     }
-
-
 
     initDraggableSelect();//拖动选择框
 
@@ -243,8 +245,6 @@ const locateGeoJSON = async () => {
         console.error(`Error locating ${selectedFilename}:`, error);
     }
 };
-
-
 
 
 async function addGeoJSONLayers(geojsonData, sourceId) {
@@ -406,7 +406,6 @@ function formatCSVAsHTML(csvText) {
     return htmlLines;
 }
 
-
 //PointLayer点击实现逻辑
 function addClickEventForPointsLayer(layerId, sourceId) {
     map.value.on('click', layerId, (e) => {
@@ -452,7 +451,6 @@ function toggleLayerVisibility(layerId, isLocking = false) {
         }
     }
 }
-
 
 //实现透明度变化动画的函数
 function changeLayerOpacity(layerId, startOpacity, endOpacity, layerType, duration = 500) {
@@ -535,9 +533,9 @@ function changeLayerOpacity(layerId, startOpacity, endOpacity, layerType, durati
 //     requestAnimationFrame(animate);
 // }
 
-
-
 </script>
+
+
 
 
 <style scoped>
