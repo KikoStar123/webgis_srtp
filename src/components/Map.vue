@@ -2,30 +2,33 @@
     <div class="map-wrap">
         <div class="map" ref="mapContainer"></div>
         <div class="draggable-select" ref="draggableSelect">
-            <ElSelect 
-                v-model="selectedGeoJSON" 
-                @change="locateGeoJSON" 
-                class="geojson-selector" 
-                placeholder="请选择地铁站"
-                filterable>
-                <ElOption
-                    v-for="fileObj in geojsonFiles"
-                    :key="fileObj.geojson"
-                    :label="fileObj.geojson.replace('.geojson', '')"
-                    :value="fileObj.geojson">
+            <ElSelect v-model="selectedBlockGeoJSON" @change="locateGeoJSON('block')"
+                class="geojson-selector block-selector" placeholder="请选择地块数据" filterable>
+                <ElOption v-for="fileObj in blockGeojsonFiles" :key="fileObj.geojson"
+                    :label="fileObj.geojson.replace('.geojson', '')" :value="fileObj.geojson">
                 </ElOption>
+            </ElSelect>
+            <ElSelect v-model="selectedIsochroneGeoJSON" @change="locateGeoJSON('isochrone')"
+                class="geojson-selector isochrone-selector" placeholder="请选择等时圈数据" filterable>
+                <ElOption v-for="fileObj in isochroneGeojsonFiles" :key="fileObj.geojson"
+                    :label="fileObj.geojson.replace('.geojson', '')" :value="fileObj.geojson">
+                </ElOption>
+            </ElSelect>
+            <ElSelect v-model="selectedColorCriteria" @change="updateBlockColors" class="color-criteria-selector"
+                placeholder="请选择着色标准" filterable>
+                <ElOption label="容积率" value="floorAreaRatio"></ElOption>
+                <ElOption label="建筑密度" value="buildingDensity"></ElOption>
+                <ElOption label="建筑高度" value="avgHeight"></ElOption>
             </ElSelect>
         </div>
     </div>
 </template>
 
-
-
 <script setup>
 import { Map, MapStyle, config } from '@maptiler/sdk';
 import { shallowRef, onMounted, onUnmounted, ref } from 'vue';
 import '@maptiler/sdk/dist/maptiler-sdk.css';
-import maplibregl from 'maplibre-gl'; 
+import maplibregl from 'maplibre-gl';
 import { ElSelect, ElOption } from 'element-plus';
 import 'element-plus/dist/index.css';
 
@@ -34,20 +37,23 @@ config.unit = 'metric'; // 比例尺公制单位
 
 const mapContainer = shallowRef(null);
 const map = shallowRef(null);
-const geojsonFiles = ref([]);//存储对象数组
-const selectedGeoJSON = ref(''); //下拉列表
-const draggableSelect = ref(null);//拖动选择框
-const backendUrl = import.meta.env.VITE_BACKEND_URL;//调用全局分配的域名地址
-const layerCsvContentMap = new window.Map();//全局csv描述信息存储Map
+const isochroneGeojsonFiles = ref([]); // 存储等时圈数据对象数组
+const blockGeojsonFiles = ref([]); // 存储地块数据对象数组
+const selectedIsochroneGeoJSON = ref(''); // 选择的等时圈GeoJSON文件
+const selectedBlockGeoJSON = ref(''); // 选择的地块GeoJSON文件
+const selectedColorCriteria = ref(''); // 选择的着色标准
+const draggableSelect = ref(null); // 拖动选择框
+const backendUrl = import.meta.env.VITE_BACKEND_URL; // 调用全局分配的域名地址
+const layerCsvContentMap = new window.Map(); // 全局csv描述信息存储Map
 const lockedLayerId = ref(null); // 默认没有图层被锁定，用于存储图层锁定状态
-const layerConfigs = [//图层配置
+const layerConfigs = [
     {
         id: 'geojson-layer-fill',
         type: 'fill',
         source: 'geojson',
         paint: {
             'fill-color': '#90EE90', // 浅绿色
-            'fill-opacity': 0.4    // 透明度
+            'fill-opacity': 0.8 // 透明度
         }
     },
     {
@@ -57,12 +63,12 @@ const layerConfigs = [//图层配置
         paint: {
             'line-color': '#006400', // 深绿色
             'line-width': 2,
-            'line-opacity': 0.5     // 透明度
+            'line-opacity': 0.8 // 透明度
         }
     }
 ];
 
-onMounted(async() => {//构造函数
+onMounted(async () => {
     const initialState = { lng: 116.2, lat: 39.5, zoom: 7 };
     map.value = new Map({
         container: mapContainer.value,
@@ -81,55 +87,49 @@ onMounted(async() => {//构造函数
         scaleControl: true //比例尺
     });
 
-    /*调用server.js后端api读取geojson文件,
-    运行之前在项目根目录使用终端运行：'node server/server.js' 以启动后端服务 */
     try {
-        const response = await fetch(`${backendUrl}/api/geojson-files/Nanjing`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch geojson and csv files');
+        const responseIsochrone = await fetch(`${backendUrl}/api/geojson-files/Nanjing`);
+        if (!responseIsochrone.ok) {
+            throw new Error('Failed to fetch isochrone geojson and csv files');
         }
-        const directories = await response.json();
+        const directoriesIsochrone = await responseIsochrone.json();
+        console.log("Isochrone directories:", directoriesIsochrone);
 
-        // 处理返回的数据，为每个.geojson文件和对应的.csv文件创建一个对象
-        geojsonFiles.value = directories.flatMap(dir =>
-            dir.files.filter(file => file.endsWith('.geojson')).map(geojsonFile => ({
-                geojson: geojsonFile,
-                csv: dir.files.find(csvFile => csvFile === geojsonFile.replace('.geojson', '站点信息.csv')),
-                directory: dir.directory // 存储目录名称
-            }))
-        );
+        isochroneGeojsonFiles.value = directoriesIsochrone
+            .filter(dir => dir.directory !== 'block')
+            .flatMap(dir =>
+                dir.files.filter(file => file.endsWith('.geojson')).map(geojsonFile => ({
+                    geojson: geojsonFile,
+                    csv: dir.files.find(csvFile => csvFile === geojsonFile.replace('.geojson', '站点信息.csv')),
+                    directory: dir.directory // 存储目录名称
+                }))
+            );
+        console.log("Isochrone files:", isochroneGeojsonFiles.value);
 
-        // 地图加载完成后，为每个geojson文件添加图层
-        map.value.on('load', () => {
-            geojsonFiles.value.forEach(async (fileObj) => {
-                const geojsonUrl = `${backendUrl}/static/city/Nanjing/${fileObj.directory}/${fileObj.geojson}`;
-                try {
-                    const geojsonResponse = await fetch(geojsonUrl);
-                    if (!geojsonResponse.ok) {
-                        throw new Error(`Failed to fetch GeoJSON data from ${geojsonUrl}`);
-                    }
-                    const geojsonData = await geojsonResponse.json();
-                    // 使用geojsonData添加地图图层
-                    addGeoJSONLayers(geojsonData, fileObj.geojson);
-                } catch (error) {
-                    console.error(`Error loading GeoJSON from ${fileObj.geojson}:`, error);
-                }
-            });
-        });
+        const responseBlock = await fetch(`${backendUrl}/api/geojson-files/Nanjing/block`);
+        if (!responseBlock.ok) {
+            throw new Error('Failed to fetch block geojson and csv files');
+        }
+        const blockFiles = await responseBlock.json();
+        console.log("Block files:", blockFiles);
+
+        blockGeojsonFiles.value = blockFiles.files.filter(file => file.endsWith('.geojson')).map(geojsonFile => ({
+            geojson: geojsonFile,
+            csv: blockFiles.files.find(csvFile => csvFile === geojsonFile.replace('.geojson', '站点信息.csv')),
+            directory: 'block' // 存储目录名称
+        }));
+        console.log("Block geojson files:", blockGeojsonFiles.value);
     } catch (error) {
         console.error('Error fetching geojson and csv files:', error);
     }
 
     initDraggableSelect();//拖动选择框
-
 });
 
-
-onUnmounted(() => {//析构函数
+onUnmounted(() => {
     map.value?.remove();
 });
 
-//选择框的拖动逻辑
 function initDraggableSelect() {
     let isDragging = false;
     let offsetX = 0;
@@ -163,13 +163,12 @@ function initDraggableSelect() {
     draggableSelect.value.addEventListener('mousedown', onMouseDown);
 }
 
-
-const calculateCenter = (features) => {//计算区域中心函数
+const calculateCenter = (features) => {
     let x = 0, y = 0, count = 0;
     features.forEach(feature => {
         let coordinates = [];
         if (feature.geometry.type === 'Polygon') {
-            coordinates = feature.geometry.coordinates[0]; // 取第一个多边形环
+            coordinates = feature.geometry.coordinates[0];
         } else if (feature.geometry.type === 'Point') {
             coordinates = [feature.geometry.coordinates];
         }
@@ -183,61 +182,33 @@ const calculateCenter = (features) => {//计算区域中心函数
     return count > 0 ? [x / count, y / count] : null;
 };
 
-
-const locateGeoJSON = async () => {
-    const selectedFilename = selectedGeoJSON.value; // 使用v-model绑定的值
+const locateGeoJSON = async (type) => {
+    const selectedFilename = type === 'isochrone' ? selectedIsochroneGeoJSON.value : selectedBlockGeoJSON.value;
     try {
-        const fileObj = geojsonFiles.value.find(item => item.geojson === selectedFilename);
+        const fileObj = type === 'isochrone'
+            ? isochroneGeojsonFiles.value.find(item => item.geojson === selectedFilename)
+            : blockGeojsonFiles.value.find(item => item.geojson === selectedFilename);
         if (!fileObj) {
             throw new Error(`File ${selectedFilename} not found in geojsonFiles array.`);
         }
 
-        const geojsonUrl = `${backendUrl}/static/city/Nanjing/${fileObj.directory}/${fileObj.geojson}`;
+        const geojsonUrl = `${backendUrl}/api/geojson-files/Nanjing/${type === 'isochrone' ? encodeURIComponent(fileObj.directory) : 'block'}/${encodeURIComponent(fileObj.geojson)}`;
+        console.log(`Fetching GeoJSON data from ${geojsonUrl}`); // 添加调试输出
         const response = await fetch(geojsonUrl);
         if (!response.ok) {
             throw new Error(`Failed to fetch ${geojsonUrl}: ${response.statusText}`);
         }
         const geojsonData = await response.json();
 
-        // 如果GeoJSON是Polygon类型，将其包装在FeatureCollection中
-        let features = [];
-        if (geojsonData.type === 'Polygon') {
-            features.push({
-                type: 'Feature',
-                properties: {},
-                geometry: geojsonData
-            });
-        } else if (geojsonData.type === 'FeatureCollection') {
-            features = geojsonData.features;
-        } else {
-            throw new Error(`Unsupported GeoJSON type: ${geojsonData.type}`);
-        }
+        await addGeoJSONLayers(geojsonData, fileObj.geojson);
 
-        const center = calculateCenter(features);
+        const center = calculateCenter(geojsonData.features || []);
         if (center) {
             map.value.flyTo({
                 center: center,
                 zoom: 13,
                 essential: true
             });
-
-            // 遍历所有图层，调整可见性，但尊重锁定状态
-            layerConfigs.forEach(config => {
-                const layerId = `${fileObj.geojson}-${config.id}`;
-                const isLocked = lockedLayerId.value === layerId;
-
-                // 如果该图层被锁定，则显示它；否则，如果不是被选中的新图层，则隐藏它
-                if (isLocked || selectedFilename === fileObj.geojson) {
-                    toggleLayerVisibility(layerId);
-                } else {
-                    toggleLayerVisibility(layerId); // 这里可以根据需要修改成隐藏图层的逻辑
-                }
-            });
-
-            // 如果选中的新图层没有被锁定，则更新锁定状态为 null
-            if (lockedLayerId.value !== null && selectedFilename !== lockedLayerId.value.split('-')[0]) {
-                lockedLayerId.value = null;
-            }
         } else {
             console.error(`无法定位到 ${selectedFilename}，因为中心坐标无效`);
         }
@@ -246,86 +217,107 @@ const locateGeoJSON = async () => {
     }
 };
 
-
 async function addGeoJSONLayers(geojsonData, sourceId) {
     if (!map.value) return;
-    let currentPopup; // 在函数作用域内维护当前弹窗的引用
-    // 添加 GeoJSON 数据源
-    map.value.addSource(sourceId, {
-        type: 'geojson',
-        data: geojsonData
-    });
+    let currentPopup;
 
-    
-    layerConfigs.forEach(config => {// 根据配置添加非点图层
+    console.log(`Adding GeoJSON layers for source ${sourceId}`); // 添加调试输出
+    if (!map.value.getSource(sourceId)) {
+        map.value.addSource(sourceId, {
+            type: 'geojson',
+            data: geojsonData
+        });
+    } else {
+        map.value.getSource(sourceId).setData(geojsonData);
+    }
+
+    const colorCriteria = selectedColorCriteria.value;
+
+    layerConfigs.forEach(config => {
         const layerConfig = {
             ...config,
             source: sourceId,
             id: `${sourceId}-${config.id}`,
-            layout: { visibility: 'none' } // 初始设置为不可见
+            layout: { visibility: 'visible' }
         };
-        map.value.addLayer(layerConfig);
 
-        // 如果是非点图层，则添加点击事件处理逻辑
+        if (colorCriteria && config.id === 'geojson-layer-fill') {
+            layerConfig.paint['fill-color'] = [
+                'interpolate',
+                ['linear'],
+                ['get', colorCriteria],
+                ...(colorCriteria === 'floorAreaRatio' ? getFloorAreaRatioColors() :
+                    colorCriteria === 'buildingDensity' ? getBuildingDensityColors() : getBuildingHeightColors())
+            ];
+        }
+
+        if (!map.value.getLayer(layerConfig.id)) {
+            map.value.addLayer(layerConfig);
+        } else {
+            map.value.setPaintProperty(layerConfig.id, 'fill-color', layerConfig.paint['fill-color']);
+        }
+
         if (config.type !== 'symbol') {
             map.value.on('contextmenu', layerConfig.id, (e) => {
-                e.preventDefault(); // 阻止默认的右键菜单事件
-                // 如果当前已经有一个弹窗，则关闭它
+                e.preventDefault();
                 if (currentPopup) {
                     currentPopup.remove();
                 }
-                const properties = e.features[0].properties; 
+                const properties = e.features[0].properties;
                 const coordinates = e.lngLat;
                 const layerId = `${sourceId}-${config.id}`;
                 const csvHtmlContent = layerCsvContentMap.get(layerId);
-                currentPopup =new maplibregl.Popup()
+                currentPopup = new maplibregl.Popup()
                     .setLngLat([coordinates.lng, coordinates.lat])
                     .setHTML(csvHtmlContent)
                     .addTo(map.value);
             });
-
         }
     });
 
-    // 加载与当前 GeoJSON 关联的 CSV 文件并添加点图层
-    const fileObj = geojsonFiles.value.find(item => item.geojson === sourceId);
+    const fileObj = isochroneGeojsonFiles.value.find(item => item.geojson === sourceId) || blockGeojsonFiles.value.find(item => item.geojson === sourceId);
     if (fileObj && fileObj.csv) {
-        const csvUrl = `${backendUrl}/static/city/Nanjing/${fileObj.directory}/${fileObj.csv}`;
+        const csvUrl = `${backendUrl}/api/geojson-files/Nanjing/${fileObj.directory ? encodeURIComponent(fileObj.directory) : 'block'}/${encodeURIComponent(fileObj.csv)}`;
         try {
+            console.log(`Fetching CSV data from ${csvUrl}`); // 添加调试输出
             const csvResponse = await fetch(csvUrl);
             if (!csvResponse.ok) throw new Error(`Failed to fetch ${csvUrl}: ${csvResponse.statusText}`);
             const csvText = await csvResponse.text();
-            const pointsData = parseCSVToGeoJSON(csvText); // 解析 CSV 为 GeoJSON
+            const pointsData = parseCSVToGeoJSON(csvText);
             const csvHtmlContent = formatCSVAsHTML(csvText);
             layerConfigs.forEach(config => {
                 const layerId = `${sourceId}-${config.id}`;
                 layerCsvContentMap.set(layerId, csvHtmlContent);
             });
 
-            // 加载自定义图标并添加点图层
             map.value.loadImage(`${backendUrl}/static/images/underground2.png`, async (error, image) => {
                 if (error) return console.error('Error loading image:', error);
                 if (!map.value.hasImage('custom-pin')) map.value.addImage('custom-pin', image);
 
-                map.value.addSource(`${sourceId}-points`, { type: 'geojson', data: pointsData });
-                map.value.addLayer({
-                    id: `${sourceId}-points-layer`,
-                    type: 'symbol',
-                    source: `${sourceId}-points`,
-                    layout: {
-                        'icon-image': 'custom-pin',
-                        'icon-size': 0.12,
-                        'icon-anchor': 'bottom'
-                    },
-                    minzoom: 7,
-                });
+                if (!map.value.getSource(`${sourceId}-points`)) {
+                    map.value.addSource(`${sourceId}-points`, { type: 'geojson', data: pointsData });
+                } else {
+                    map.value.getSource(`${sourceId}-points`).setData(pointsData);
+                }
 
-                // 点击点图层控制非点图层的可见性
+                if (!map.value.getLayer(`${sourceId}-points-layer`)) {
+                    map.value.addLayer({
+                        id: `${sourceId}-points-layer`,
+                        type: 'symbol',
+                        source: `${sourceId}-points`,
+                        layout: {
+                            'icon-image': 'custom-pin',
+                            'icon-size': 0.12,
+                            'icon-anchor': 'bottom'
+                        },
+                        minzoom: 7,
+                    });
+                }
+
                 map.value.on('click', `${sourceId}-points-layer`, (e) => {
                     const features = map.value.queryRenderedFeatures(e.point, { layers: [`${sourceId}-points-layer`] });
                     if (features.length > 0) {
                         layerConfigs.forEach(config => {
-                            //shakeIconAnimation(`${sourceId}-points-layer`, 0.12, 0.24, 0.03, 500);
                             const targetLayerId = `${sourceId}-${config.id}`;
                             toggleLayerVisibility(targetLayerId, true);
                         });
@@ -339,17 +331,12 @@ async function addGeoJSONLayers(geojsonData, sourceId) {
     }
 }
 
-
-//从csv文件当中获取经纬度
 function parseCSVToGeoJSON(csvText) {
-    // 移除 CSV 头部（列标题行），并分割每一行
     const lines = csvText.trim().split('\n').slice(1);
 
     const features = lines.map(line => {
-        // CSV 分割，考虑到经纬度在引号内
         const columns = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
 
-        // 提取经纬度，假设格式为 "(纬度, 经度)"
         const regex = /\(([^,]+),\s*([^)]+)\)/;
         const match = columns[1].match(regex);
         if (!match) return null;
@@ -358,17 +345,15 @@ function parseCSVToGeoJSON(csvText) {
         const lng = parseFloat(match[2]);
         if (isNaN(lat) || isNaN(lng)) return null;
 
-        // 构建并返回 GeoJSON Feature
         return {
             type: 'Feature',
             properties: {
-                name: columns[0].replace(/"/g, ''), // 站点名称
-                exits: parseInt(columns[2], 10), // 出入口个数
-                // 根据需要添加更多属性
+                name: columns[0].replace(/"/g, ''),
+                exits: parseInt(columns[2], 10),
             },
             geometry: {
                 type: 'Point',
-                coordinates: [lng, lat] // GeoJSON 需要 [经度, 纬度] 格式
+                coordinates: [lng, lat]
             }
         };
     }).filter(feature => feature != null);
@@ -380,48 +365,65 @@ function parseCSVToGeoJSON(csvText) {
 }
 
 function formatCSVAsHTML(csvText) {
-    // 按行分割CSV文本
     const rows = csvText.trim().split('\n').map(row => {
-        // 处理每一行，考虑到被双引号包裹的字段
         let match;
         const cells = [];
-        const regex = /(".*?"|[^",]+)(,|$)/g; // 匹配被双引号包裹或不包含逗号的字段
+        const regex = /(".*?"|[^",]+)(,|$)/g;
         while ((match = regex.exec(row)) !== null) {
-            // 删除字段两端的双引号（如果有）
             let cell = match[1].replace(/^"|"$/g, '');
             cells.push(cell);
         }
         return cells;
     });
 
-    // 转置行和列
     const columns = rows[0] ? rows[0].map((_, i) => rows.map(row => row[i])) : [];
 
-    // 将每一列（现在是“行”）转换为HTML
     const htmlLines = columns.map(column => {
-        // 将每个元素用冒号和空格连接，然后用<p>标签包裹
         return `<p>${column.join(':')}</p>`;
     }).join('');
 
     return htmlLines;
 }
 
-//PointLayer点击实现逻辑
-function addClickEventForPointsLayer(layerId, sourceId) {
-    map.value.on('click', layerId, (e) => {
-        // 切换相关 GeoJSON 图层的可见性
-        layerConfigs.forEach(config => {
-            const targetLayerId = `${sourceId}-${config.id}`;
-            toggleLayerVisibility(targetLayerId);
-        });
-    });
+function getFloorAreaRatioColors() {
+    return [
+        0.0, 'rgb(250,209,209)',
+        1.0, 'rgb(246,162,163)',
+        5.0, 'rgb(241,116,116)',
+        10.0, 'rgb(238,69,68)',
+        15.0, 'rgb(233,32,24)',
+        1000.0, 'rgb(255,255,255)' // 用于定义最大值以上的颜色
+    ];
 }
 
-//控制显示或者隐藏函数
+function getBuildingDensityColors() {
+    return [
+        0.0, 'rgb(245,230,208)',
+        0.2, 'rgb(235,205,160)',
+        0.4, 'rgb(225,179,111)',
+        0.6, 'rgb(215,152,62)',
+        0.8, 'rgb(205,127,16)',
+        1.0, 'rgb(205,127,16)',
+        10.0, 'rgb(255,255,255)' // 用于定义最大值以上的颜色
+    ];
+}
+
+function getBuildingHeightColors() {
+    return [
+        0.0, 'rgb(253,252,230)',
+        10.0, 'rgb(250,249,205)',
+        30.0, 'rgb(247,244,168)',
+        50.0, 'rgb(243,240,129)',
+        100.0, 'rgb(241,235,90)',
+        150.0, 'rgb(238,230,50)',
+        200.0, 'rgb(235,224,10)',
+        1000.0, 'rgb(255,255,255)' // 用于定义最大值以上的颜色
+    ];
+}
+
 function toggleLayerVisibility(layerId, isLocking = false) {
     if (!map.value) return;
 
-    // 如果尝试操作的是被锁定的图层，并且这次操作不是来自锁定/解锁操作，则直接返回
     if (lockedLayerId.value === layerId && !isLocking) {
         console.log(`图层 "${layerId}" 当前被锁定，无法更改其可见性。`);
         return;
@@ -452,11 +454,9 @@ function toggleLayerVisibility(layerId, isLocking = false) {
     }
 }
 
-//实现透明度变化动画的函数
 function changeLayerOpacity(layerId, startOpacity, endOpacity, layerType, duration = 500) {
     const opacityProperty = layerType === 'fill' ? 'fill-opacity' : 'line-opacity';
-    
-    // 确保动画开始前图层可见
+
     if (startOpacity < endOpacity) {
         map.value.setLayoutProperty(layerId, 'visibility', 'visible');
     }
@@ -467,12 +467,10 @@ function changeLayerOpacity(layerId, startOpacity, endOpacity, layerType, durati
     function stepFunction() {
         if ((step > 0 && currentOpacity < endOpacity) || (step < 0 && currentOpacity > endOpacity)) {
             currentOpacity += step;
-            // 使用 Math.max 确保透明度不小于 0
             const safeOpacity = Math.max(0, currentOpacity);
             map.value.setPaintProperty(layerId, opacityProperty, safeOpacity);
             requestAnimationFrame(stepFunction);
         } else {
-            // 动画结束，确保透明度不小于 0
             const finalOpacity = Math.max(0, endOpacity);
             map.value.setPaintProperty(layerId, opacityProperty, finalOpacity);
             if (endOpacity === 0) {
@@ -484,59 +482,23 @@ function changeLayerOpacity(layerId, startOpacity, endOpacity, layerType, durati
     stepFunction();
 }
 
-//实现图标抖动动画的函数
-// function shakeIconAnimation(layerId, startSize, endSize, step, duration) {
-//     if (!map.value) {
-//         console.error("Map instance is not initialized.");
-//         return;
-//     }
-
-//     let currentSize = startSize;
-//     let growing = true;
-//     const startTime = performance.now();
-
-//     function animate(time) {
-//         if (!map.value) {
-//             // 如果此时地图实例不存在了，就停止动画
-//             console.error("Map instance is not available.");
-//             return;
-//         }
-
-//         const elapsedTime = time - startTime;
-//         if (growing) {
-//             currentSize += step;
-//             if (currentSize >= endSize) {
-//                 growing = false;
-//                 currentSize -= step; // 开始缩小
-//             }
-//         } else {
-//             currentSize -= step;
-//             if (currentSize <= startSize) {
-//                 // 确保不会小于初始大小并结束动画
-//                 currentSize = startSize;
-//                 growing = true; // 重置状态以便下一次动画
-//                 map.value.setPaintProperty(layerId, 'icon-size', currentSize);
-//                 return; // 停止动画
-//             }
-//         }
-
-//         map.value.setPaintProperty(layerId, 'icon-size', currentSize);
-        
-//         if (elapsedTime < duration) {
-//             requestAnimationFrame(animate);
-//         } else {
-//             // 动画结束，确保图标大小恢复初始值
-//             map.value.setPaintProperty(layerId, 'icon-size', startSize);
-//         }
-//     }
-
-//     requestAnimationFrame(animate);
-// }
-
+const updateBlockColors = async () => {
+    blockGeojsonFiles.value.forEach(async (fileObj) => {
+        const geojsonUrl = `${backendUrl}/api/geojson-files/Nanjing/block/${encodeURIComponent(fileObj.geojson)}`;
+        try {
+            console.log(`Updating block colors from ${geojsonUrl}`);
+            const geojsonResponse = await fetch(geojsonUrl);
+            if (!geojsonResponse.ok) {
+                throw new Error(`Failed to fetch GeoJSON data from ${geojsonUrl}`);
+            }
+            const geojsonData = await geojsonResponse.json();
+            await addGeoJSONLayers(geojsonData, fileObj.geojson);
+        } catch (error) {
+            console.error(`Error updating block colors from ${fileObj.geojson}:`, error);
+        }
+    });
+};
 </script>
-
-
-
 
 <style scoped>
 .map-wrap {
@@ -555,23 +517,38 @@ function changeLayerOpacity(layerId, startOpacity, endOpacity, layerType, durati
 
 .geojson-selector {
     position: absolute;
-    top: 10px;
-    left: 10px; 
+    left: 10px;
     z-index: 1000;
     width: 240px;
-    border-radius: 8px; /* 圆角 */
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* 阴影 */
-    background-color: #ffffff; /* 背景色 */
-    color: #333; /* 文字颜色 */
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    background-color: #ffffff;
+    color: #333;
+}
+
+.geojson-selector.isochrone-selector {
+    top: 10px;
+    width: 300px;
+}
+
+.geojson-selector.block-selector {
+    top: 50px;
+    width: 300px;
+}
+
+.color-criteria-selector {
+    top: 90px;
+    left: 10px;
+    width: 300px;
 }
 
 .el-select .el-input {
-    border-radius: 8px; /* 下拉框圆角 */
+    border-radius: 8px;
 }
 
 .el-select-dropdown {
-    border-radius: 8px; /* 下拉选项圆角 */
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* 下拉选项阴影 */
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .draggable-select {
@@ -581,5 +558,4 @@ function changeLayerOpacity(layerId, startOpacity, endOpacity, layerType, durati
     z-index: 1000;
     cursor: grab;
 }
-
 </style>
