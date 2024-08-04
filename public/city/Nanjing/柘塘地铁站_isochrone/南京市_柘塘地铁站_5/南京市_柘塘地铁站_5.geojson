@@ -1,0 +1,21 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "station": "柘塘地铁站",
+                "intersecting_blocks": [],
+                "within_pois": [],
+                "intersecting_isochrones": []
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    118.933679,
+                    31.7578162
+                ]
+            }
+        }
+    ]
+}

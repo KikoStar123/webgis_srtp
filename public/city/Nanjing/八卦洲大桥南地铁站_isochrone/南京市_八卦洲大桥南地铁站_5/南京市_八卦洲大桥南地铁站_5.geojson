@@ -1,0 +1,58 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "station": "八卦洲大桥南地铁站",
+                "intersecting_blocks": [
+                    "Nanjing_China_4321",
+                    "Nanjing_China_4324"
+                ],
+                "within_pois": [],
+                "intersecting_isochrones": []
+            },
+            "geometry": {
+                "type": "GeometryCollection",
+                "geometries": [
+                    {
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [
+                                    118.8395115,
+                                    32.1500681
+                                ],
+                                [
+                                    118.839385,
+                                    32.150201
+                                ],
+                                [
+                                    118.8353004,
+                                    32.1462052
+                                ],
+                                [
+                                    118.8395115,
+                                    32.1500681
+                                ]
+                            ]
+                        ]
+                    },
+                    {
+                        "type": "LineString",
+                        "coordinates": [
+                            [
+                                118.8353004,
+                                32.1462052
+                            ],
+                            [
+                                118.8377996,
+                                32.1464874
+                            ]
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

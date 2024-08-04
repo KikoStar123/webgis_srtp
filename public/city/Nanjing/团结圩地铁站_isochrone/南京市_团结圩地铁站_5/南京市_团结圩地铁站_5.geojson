@@ -1,0 +1,60 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "station": "团结圩地铁站",
+                "intersecting_blocks": [
+                    "Nanjing_China_1757"
+                ],
+                "within_pois": [
+                    {
+                        "a2d886d1-6303-377d-8637-8182d0cd1a93": {
+                            "name": "团结圩(地铁站)",
+                            "type": "交通设施服务",
+                            "location": [
+                                118.88272544974832,
+                                31.3979605344357
+                            ]
+                        }
+                    },
+                    {
+                        "ad873d83-414b-30e8-9179-f3094dffe811": {
+                            "name": "团结圩地铁站(公交站)",
+                            "type": "交通设施服务",
+                            "location": [
+                                118.88280248656316,
+                                31.39824851436805
+                            ]
+                        }
+                    }
+                ],
+                "intersecting_isochrones": []
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            118.88248,
+                            31.3984188
+                        ],
+                        [
+                            118.8820913,
+                            31.3961406
+                        ],
+                        [
+                            118.8833972,
+                            31.3980857
+                        ],
+                        [
+                            118.88248,
+                            31.3984188
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}

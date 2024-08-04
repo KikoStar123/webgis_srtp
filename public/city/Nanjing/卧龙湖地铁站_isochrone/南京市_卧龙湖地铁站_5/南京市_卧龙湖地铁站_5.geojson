@@ -1,0 +1,37 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "station": "卧龙湖地铁站",
+                "intersecting_blocks": [],
+                "within_pois": [],
+                "intersecting_isochrones": []
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            119.0377491,
+                            31.6892893
+                        ],
+                        [
+                            119.0377584,
+                            31.6891401
+                        ],
+                        [
+                            119.03758,
+                            31.6921234
+                        ],
+                        [
+                            119.0377491,
+                            31.6892893
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}

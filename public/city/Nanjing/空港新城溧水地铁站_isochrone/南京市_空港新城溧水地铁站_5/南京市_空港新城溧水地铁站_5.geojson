@@ -1,0 +1,40 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "station": "空港新城溧水地铁站",
+                "intersecting_blocks": [],
+                "within_pois": [],
+                "intersecting_isochrones": [
+                    "南京市_溧水地铁站_10",
+                    "南京市_溧水地铁站_5"
+                ]
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            118.985307,
+                            31.7359081
+                        ],
+                        [
+                            118.9850455,
+                            31.7374564
+                        ],
+                        [
+                            118.9853493,
+                            31.7356571
+                        ],
+                        [
+                            118.985307,
+                            31.7359081
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}

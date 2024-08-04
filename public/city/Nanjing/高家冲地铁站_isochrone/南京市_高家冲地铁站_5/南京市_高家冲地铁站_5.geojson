@@ -1,0 +1,56 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "station": "高家冲地铁站",
+                "intersecting_blocks": [
+                    "Nanjing_China_13529",
+                    "Nanjing_China_13944"
+                ],
+                "within_pois": [],
+                "intersecting_isochrones": []
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            118.5120781,
+                            31.9116567
+                        ],
+                        [
+                            118.5124946,
+                            31.9113779
+                        ],
+                        [
+                            118.5133337,
+                            31.91138
+                        ],
+                        [
+                            118.5135286,
+                            31.9115848
+                        ],
+                        [
+                            118.5127126,
+                            31.912398
+                        ],
+                        [
+                            118.5125989,
+                            31.9123167
+                        ],
+                        [
+                            118.5123939,
+                            31.9121562
+                        ],
+                        [
+                            118.5120781,
+                            31.9116567
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}

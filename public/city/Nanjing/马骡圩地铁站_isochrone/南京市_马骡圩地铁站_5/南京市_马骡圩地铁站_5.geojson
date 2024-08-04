@@ -1,0 +1,52 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "station": "马骡圩地铁站",
+                "intersecting_blocks": [],
+                "within_pois": [
+                    {
+                        "d884da41-5872-3c52-b100-2d898fd70094": {
+                            "name": "马骡圩(地铁站)",
+                            "type": "交通设施服务",
+                            "location": [
+                                118.58337093922115,
+                                31.97535121374003
+                            ]
+                        }
+                    }
+                ],
+                "intersecting_isochrones": []
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            118.5849904,
+                            31.9731356
+                        ],
+                        [
+                            118.5842834,
+                            31.97596
+                        ],
+                        [
+                            118.5856026,
+                            31.9792056
+                        ],
+                        [
+                            118.5825316,
+                            31.9748831
+                        ],
+                        [
+                            118.5849904,
+                            31.9731356
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}

@@ -1,0 +1,58 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "station": "明觉地铁站",
+                "intersecting_blocks": [
+                    "Nanjing_China_1757",
+                    "Nanjing_China_2892"
+                ],
+                "within_pois": [],
+                "intersecting_isochrones": []
+            },
+            "geometry": {
+                "type": "GeometryCollection",
+                "geometries": [
+                    {
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [
+                                    118.8971135,
+                                    31.5485748
+                                ],
+                                [
+                                    118.8975942,
+                                    31.5482218
+                                ],
+                                [
+                                    118.897354,
+                                    31.5485584
+                                ],
+                                [
+                                    118.8971135,
+                                    31.5485748
+                                ]
+                            ]
+                        ]
+                    },
+                    {
+                        "type": "LineString",
+                        "coordinates": [
+                            [
+                                118.8966675,
+                                31.5482264
+                            ],
+                            [
+                                118.8971135,
+                                31.5485748
+                            ]
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

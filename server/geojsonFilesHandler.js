@@ -25,11 +25,16 @@ export const geojsonFilesHandler = (req, res) => {
         directories.forEach(dir => {
             const dirPath = path.join(targetDir, dir.name);
             console.log(`Reading sub-directory: ${dirPath}`);
-            const files = fs.readdirSync(dirPath).filter(file => file.endsWith('.geojson') || file.endsWith('.csv'));
+            const subDirectories = fs.readdirSync(dirPath, { withFileTypes: true }).filter(entry => entry.isDirectory());
 
-            results.push({
-                directory: dir.name,
-                files: files
+            subDirectories.forEach(subDir => {
+                const subDirPath = path.join(dirPath, subDir.name);
+                const files = fs.readdirSync(subDirPath).filter(file => file.endsWith('.geojson') || file.endsWith('.csv'));
+
+                results.push({
+                    directory: `${dir.name}/${subDir.name}`,
+                    files: files
+                });
             });
         });
 
@@ -38,25 +43,6 @@ export const geojsonFilesHandler = (req, res) => {
     });
 };
 
-export const geojsonFilesInDirectoryHandler = (req, res) => {
-    const { cityName, subDir } = req.params;
-    const targetDir = path.join(__dirname, '..', 'public', 'city', cityName, subDir);
-
-    console.log(`Reading directory: ${targetDir}`);
-
-    fs.readdir(targetDir, (err, files) => {
-        if (err) {
-            console.error(`Error reading directory: ${err.message}`);
-            res.status(500).send('Error reading directory');
-            return;
-        }
-
-        const geojsonFiles = files.filter(file => file.endsWith('.geojson') || file.endsWith('.csv'));
-
-        console.log(`Found files: ${JSON.stringify(geojsonFiles)}`);
-        res.json({ files: geojsonFiles });
-    });
-};
 
 export const geojsonFileContentHandler = (req, res) => {
     const { cityName, subDir, fileName } = req.params;

@@ -1,0 +1,58 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "station": "石碛河地铁站",
+                "intersecting_blocks": [
+                    "Nanjing_China_13529"
+                ],
+                "within_pois": [
+                    {
+                        "c3bf7f82-5668-3521-bb1f-9bf485c4ae42": {
+                            "name": "石碛河(地铁站)",
+                            "type": "交通设施服务",
+                            "location": [
+                                118.55299282435314,
+                                31.94018562838169
+                            ]
+                        }
+                    }
+                ],
+                "intersecting_isochrones": []
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            118.5530078,
+                            31.9405863
+                        ],
+                        [
+                            118.5504725,
+                            31.9385492
+                        ],
+                        [
+                            118.5531976,
+                            31.9399416
+                        ],
+                        [
+                            118.5533247,
+                            31.9402778
+                        ],
+                        [
+                            118.5530749,
+                            31.9405602
+                        ],
+                        [
+                            118.5530078,
+                            31.9405863
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}

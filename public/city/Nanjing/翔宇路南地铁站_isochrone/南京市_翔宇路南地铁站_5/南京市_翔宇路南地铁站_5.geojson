@@ -1,0 +1,39 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "station": "翔宇路南地铁站",
+                "intersecting_blocks": [
+                    "Nanjing_China_2771"
+                ],
+                "within_pois": [],
+                "intersecting_isochrones": []
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            118.8235707,
+                            31.7583127
+                        ],
+                        [
+                            118.8234372,
+                            31.7581939
+                        ],
+                        [
+                            118.8263226,
+                            31.7600062
+                        ],
+                        [
+                            118.8235707,
+                            31.7583127
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}

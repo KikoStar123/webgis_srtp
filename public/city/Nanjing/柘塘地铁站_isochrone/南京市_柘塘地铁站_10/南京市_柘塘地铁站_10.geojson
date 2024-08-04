@@ -1,0 +1,51 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "station": "柘塘地铁站",
+                "intersecting_blocks": [
+                    "Nanjing_China_2592",
+                    "Nanjing_China_2686"
+                ],
+                "within_pois": [
+                    {
+                        "f87f512c-7995-31a8-a869-2e663fcc4974": {
+                            "name": "新安路与牌头路交叉口",
+                            "type": "地名地址信息",
+                            "location": [
+                                118.93618764248332,
+                                31.75922698580582
+                            ]
+                        }
+                    }
+                ],
+                "intersecting_isochrones": []
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            118.933679,
+                            31.7578162
+                        ],
+                        [
+                            118.9370269,
+                            31.7560369
+                        ],
+                        [
+                            118.9361888,
+                            31.7592442
+                        ],
+                        [
+                            118.933679,
+                            31.7578162
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}

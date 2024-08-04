@@ -1,0 +1,41 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "station": "正方中路地铁站",
+                "intersecting_blocks": [],
+                "within_pois": [],
+                "intersecting_isochrones": []
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            118.8005125,
+                            31.8458117
+                        ],
+                        [
+                            118.8007953,
+                            31.8457891
+                        ],
+                        [
+                            118.8008162,
+                            31.8460018
+                        ],
+                        [
+                            118.8005132,
+                            31.8460189
+                        ],
+                        [
+                            118.8005125,
+                            31.8458117
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}
