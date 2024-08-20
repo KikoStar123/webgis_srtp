@@ -1,28 +1,31 @@
 <template>
     <div class="map-wrap">
         <div class="map" ref="mapContainer"></div>
-        <div class="draggable-select" ref="draggableSelect">
+        <div class="control-panel">
             <div class="selector-container">
-                <ElSelect v-model="selectedIsochroneGeoJSON" @change="loadIsochroneAndBlocks"
-                    class="geojson-selector isochrone-selector" placeholder="请选择等时圈数据" filterable>
+                <!-- 时间选择按钮组 -->
+                <ElRadioGroup v-model="selectedTime" class="time-selector">
+                    <ElRadioButton label="5分钟">5分钟</ElRadioButton>
+                    <ElRadioButton label="10分钟">10分钟</ElRadioButton>
+                </ElRadioGroup>
+
+                <!-- 等时圈选择框 -->
+                <ElSelect v-model="selectedIsochroneGeoJSON" class="geojson-selector" placeholder="请选择等时圈数据" filterable>
                     <ElOption v-for="fileObj in isochroneGeojsonFiles" :key="fileObj.key"
                         :label="fileObj.geojson.replace('.geojson', '')" :value="fileObj.key">
                     </ElOption>
                 </ElSelect>
-                <ElSelect v-model="selectedBlockGeoJSON" @change="locateGeoJSON('block')"
-                    class="geojson-selector block-selector" placeholder="请选择地块数据" filterable>
-                    <ElOption v-for="fileObj in filteredBlockGeojsonFiles" :key="fileObj.key"
-                        :label="fileObj.geojson.replace('.geojson', '')" :value="fileObj.key">
+
+                <!-- 地块属性选择框 -->
+                <ElSelect v-model="selectedProperty" class="geojson-selector" placeholder="请选择地块属性" filterable
+                    @change="updateBlockColors">
+                    <ElOption v-for="property in properties" :key="property" :label="property" :value="property">
                     </ElOption>
                 </ElSelect>
-                <ElSelect v-model="selectedColorCriteria" @change="updateBlockColors" class="color-criteria-selector"
-                    placeholder="请选择着色标准" filterable>
-                    <ElOption label="容积率" value="floorAreaRatio"></ElOption>
-                    <ElOption label="建筑密度" value="buildingDensity"></ElOption>
-                    <ElOption label="建筑高度" value="avgHeight"></ElOption>
-                </ElSelect>
+
+                <!-- 地块显示/隐藏开关 -->
                 <ElSwitch v-model="showBlocks" @change="toggleBlockVisibility" class="block-visibility-toggle"
-                    active-text="显示地块" inactive-text="隐藏地块" :value="false">
+                    active-text="显示地块" inactive-text="隐藏地块">
                 </ElSwitch>
             </div>
         </div>
@@ -34,7 +37,7 @@ import { Map, MapStyle, config } from '@maptiler/sdk';
 import { shallowRef, onMounted, onUnmounted, ref, watch } from 'vue';
 import '@maptiler/sdk/dist/maptiler-sdk.css';
 import maplibregl from 'maplibre-gl';
-import { ElSelect, ElOption, ElSwitch } from 'element-plus';
+import { ElSelect, ElOption, ElSwitch, ElRadioGroup, ElRadioButton } from 'element-plus';
 import 'element-plus/dist/index.css';
 
 config.apiKey = 'nMI0OagfwxzpRVopD5sR';
@@ -43,38 +46,14 @@ config.unit = 'metric'; // 比例尺公制单位
 const mapContainer = shallowRef(null);
 const map = shallowRef(null);
 const isochroneGeojsonFiles = ref([]); // 存储等时圈数据对象数组
-const blockGeojsonFiles = ref([]); // 存储地块数据对象数组
-const filteredBlockGeojsonFiles = ref([]); // 存储过滤后的地块数据对象数组
 const selectedIsochroneGeoJSON = ref(''); // 选择的等时圈GeoJSON文件
-const selectedBlockGeoJSON = ref(''); // 选择的地块GeoJSON文件
-const selectedColorCriteria = ref(''); // 选择的着色标准
+const previousIsochrone = ref(''); // 保存上一个等时圈的选择值
+const selectedTime = ref(''); // 选择的时间（5分钟或10分钟）
+const selectedProperty = ref('floorAreaRatio'); // 选择的属性，默认选择第一个属性
 const showBlocks = ref(false); // 控制地块显示开关
-const draggableSelect = ref(null); // 拖动选择框
-const backendUrl = import.meta.env.VITE_BACKEND_URL; // 调用全局分配的域名地址
-const layerCsvContentMap = new window.Map(); // 全局csv描述信息存储Map
-const displayedIsochroneLayers = ref([]); // 存储当前显示的等时圈图层
-const displayedBlockLayers = ref([]); // 存储当前显示的地块图层
-const layerConfigs = [
-    {
-        id: 'geojson-layer-fill',
-        type: 'fill',
-        source: 'geojson',
-        paint: {
-            'fill-color': '#90EE90', // 浅绿色
-            'fill-opacity': 0.8 // 透明度
-        }
-    },
-    {
-        id: 'geojson-layer-line',
-        type: 'line',
-        source: 'geojson',
-        paint: {
-            'line-color': '#006400', // 深绿色
-            'line-width': 2,
-            'line-opacity': 0.8 // 透明度
-        }
-    }
-];
+const blockNames = ref([]); // 存储地块名称列表
+const properties = ref(['floorAreaRatio', 'buildingDensity', 'avgHeight']); // 地块属性列表
+const backendUrl = "http://47.101.210.178:3001"; // 调用全局分配的域名地址
 
 onMounted(async () => {
     const initialState = { lng: 116.2, lat: 39.5, zoom: 7 };
@@ -92,391 +71,249 @@ onMounted(async () => {
                 right: '10px'
             }
         },
-        scaleControl: true //比例尺
-    });
-
-    // 监听 styleimagemissing 事件
-    map.value.on('styleimagemissing', (e) => {
-        const id = e.id;
-        if (id === 'custom-pin') {
-            map.value.loadImage(`${backendUrl}/static/images/underground2.png`, (error, image) => {
-                if (error) {
-                    console.error('Error loading image:', error);
-                    return;
-                }
-                if (!map.value.hasImage('custom-pin')) {
-                    map.value.addImage('custom-pin', image);
-                }
-            });
-        }
+        scaleControl: true // 比例尺
     });
 
     try {
-        const response = await fetch(`${backendUrl}/api/geojson-files/Nanjing`);
+        const response = await fetch(`${backendUrl}/query/Nanjing/station`);
         if (!response.ok) {
-            throw new Error('Failed to fetch geojson and csv files');
+            throw new Error('Failed to fetch station data');
         }
-        const directories = await response.json();
-        console.log("Directories:", directories);
-
-        isochroneGeojsonFiles.value = directories
-            .flatMap(dir =>
-                dir.files.filter(file => /地铁站_\d+\.geojson$/.test(file)).map(geojsonFile => ({
-                    key: `${dir.directory}/${geojsonFile}`, // 确保唯一性
-                    geojson: geojsonFile,
-                    csv: dir.files.find(csvFile => csvFile === geojsonFile.replace('.geojson', '站点信息.csv')),
-                    directory: dir.directory // 存储目录名称
-                }))
-            );
-
-        blockGeojsonFiles.value = directories
-            .flatMap(dir =>
-                dir.files.filter(file => !/地铁站_\d+\.geojson$/.test(file) && file.endsWith('.geojson')).map(geojsonFile => ({
-                    key: `${dir.directory}/${geojsonFile}`, // 确保唯一性
-                    geojson: geojsonFile,
-                    csv: dir.files.find(csvFile => csvFile === geojsonFile.replace('.geojson', '站点信息.csv')),
-                    directory: dir.directory // 存储目录名称
-                }))
-            );
-
-        console.log("Isochrone files:", isochroneGeojsonFiles.value);
-        console.log("Block files:", blockGeojsonFiles.value);
+        const stations = await response.json();
+        isochroneGeojsonFiles.value = stations.map(station => ({
+            key: station,
+            geojson: station
+        }));
     } catch (error) {
-        console.error('Error fetching geojson and csv files:', error);
+        console.error('Error fetching station data:', error);
     }
-
-    initDraggableSelect(); //拖动选择框
-});
-
-watch([isochroneGeojsonFiles, blockGeojsonFiles], () => {
-    console.log("Isochrone GeoJSON files:", isochroneGeojsonFiles.value);
-    console.log("Block GeoJSON files:", blockGeojsonFiles.value);
 });
 
 onUnmounted(() => {
     map.value?.remove();
 });
 
-function initDraggableSelect() {
-    let isDragging = false;
-    let offsetX = 0;
-    let offsetY = 0;
+// 监听等时圈和时间选择的变化
+watch([selectedIsochroneGeoJSON, selectedTime], async ([isochrone, time], [oldIsochrone, oldTime]) => {
+    // 当等时圈变化时，隐藏上一个等时圈的地块
+    if (isochrone && oldIsochrone && isochrone !== oldIsochrone) {
+        hideAndRemoveCurrentBlocks(); // 隐藏并移除上一个等时圈的地块
+        previousIsochrone.value = isochrone; // 更新记录的上一个等时圈
+    }
 
-    const onMouseDown = (e) => {
-        isDragging = true;
-        const computedStyle = window.getComputedStyle(draggableSelect.value);
-        const currentLeft = parseInt(computedStyle.left, 10) || 0;
-        const currentTop = parseInt(computedStyle.top, 10) || 0;
-        offsetX = e.clientX - currentLeft;
-        offsetY = e.clientY - currentTop;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    };
+    // 当等时圈和时间都被选择后，加载新的数据
+    if (isochrone && time) {
+        await loadIsochroneAndBlocks();
+    }
+});
 
-    const onMouseMove = (e) => {
-        if (!isDragging) return;
-        const x = e.clientX - offsetX;
-        const y = e.clientY - offsetY;
-        draggableSelect.value.style.left = `${x}px`;
-        draggableSelect.value.style.top = `${y}px`;
-    };
-
-    const onMouseUp = () => {
-        isDragging = false;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-    };
-
-    draggableSelect.value.addEventListener('mousedown', onMouseDown);
-}
-
-const calculateCenter = (features) => {
-    let x = 0, y = 0, count = 0;
-    features.forEach(feature => {
-        let coordinates = [];
-        if (feature.geometry.type === 'Polygon') {
-            coordinates = feature.geometry.coordinates[0];
-        } else if (feature.geometry.type === 'Point') {
-            coordinates = [feature.geometry.coordinates];
-        }
-        coordinates.forEach(coord => {
-            x += coord[0];
-            y += coord[1];
-            count++;
-        });
-    });
-
-    return count > 0 ? [x / count, y / count] : null;
-};
-
+// 定义 loadIsochroneAndBlocks 函数
 const loadIsochroneAndBlocks = async () => {
-    // 关闭地块显示开关并隐藏当前显示的地块图层
-    if (showBlocks.value) {
-        showBlocks.value = false;
-        await toggleBlockVisibility();
-    }
-
-    const selectedIsochrone = selectedIsochroneGeoJSON.value;
-    const fileObj = isochroneGeojsonFiles.value.find(item => item.key === selectedIsochrone);
-    if (!fileObj) {
-        console.error(`File ${selectedIsochrone} not found in isochroneGeojsonFiles array.`);
-        return;
-    }
-
-    const suffix = fileObj.geojson.match(/_(\d+)\.geojson$/)[1]; // 提取后缀（分钟数）
-    const prefix = fileObj.geojson.replace(/_\d+\.geojson$/, ''); // 提取前缀
-
-    // 获取需要隐藏的同名但后缀不同的等时圈图层
-    const layersToHide = displayedIsochroneLayers.value.filter(layerId => {
-        const layerFileObj = isochroneGeojsonFiles.value.find(item => item.key === layerId);
-        if (!layerFileObj) return false;
-        const layerSuffix = layerFileObj.geojson.match(/_(\d+)\.geojson$/)[1];
-        const layerPrefix = layerFileObj.geojson.replace(/_\d+\.geojson$/, '');
-        return layerPrefix === prefix && layerSuffix !== suffix;
-    });
-
-    // 隐藏需要隐藏的等时圈图层
-    layersToHide.forEach(layerId => {
-        if (map.value.getLayer(`${layerId}-geojson-layer-fill`)) {
-            map.value.setLayoutProperty(`${layerId}-geojson-layer-fill`, 'visibility', 'none');
-        }
-        if (map.value.getLayer(`${layerId}-geojson-layer-line`)) {
-            map.value.setLayoutProperty(`${layerId}-geojson-layer-line`, 'visibility', 'none');
-        }
-        displayedIsochroneLayers.value = displayedIsochroneLayers.value.filter(id => id !== layerId);
-    });
-
-    // 显示当前选择的等时圈图层
-    const existingLayer = displayedIsochroneLayers.value.find(layerId => layerId === fileObj.key);
-    if (existingLayer) {
-        if (map.value.getLayer(`${fileObj.key}-geojson-layer-fill`)) {
-            map.value.setLayoutProperty(`${fileObj.key}-geojson-layer-fill`, 'visibility', 'visible');
-        }
-        if (map.value.getLayer(`${fileObj.key}-geojson-layer-line`)) {
-            map.value.setLayoutProperty(`${fileObj.key}-geojson-layer-line`, 'visibility', 'visible');
-        }
-        console.log(`Shown GeoJSON layers for source ${fileObj.key}`);
-        return;
-    }
-
-    const geojsonUrl = `${backendUrl}/api/geojson-files/Nanjing/${encodeURIComponent(fileObj.directory)}/${encodeURIComponent(fileObj.geojson)}`;
-    console.log(`Fetching GeoJSON data from ${geojsonUrl}`);
-    const response = await fetch(geojsonUrl);
-    if (!response.ok) {
-        console.error(`Failed to fetch ${geojsonUrl}: ${response.statusText}`);
-        return;
-    }
-    const geojsonData = await response.json();
-
-    // 不自动显示相交的地块数据
-    filteredBlockGeojsonFiles.value = blockGeojsonFiles.value.filter(blockFile => false);
-
-    console.log("Filtered block geojson files:", filteredBlockGeojsonFiles.value);
-
-    // 显示新的等时圈
-    await addGeoJSONLayers(geojsonData, fileObj.key);
-    displayedIsochroneLayers.value.push(fileObj.key); // 添加到显示的图层列表中
-
-    // 跳转到等时圈位置
-    const center = calculateCenter(geojsonData.features || []);
-    if (center) {
-        map.value.flyTo({
-            center: center,
-            zoom: 13,
-            essential: true
-        });
-    } else {
-        console.error(`无法定位到 ${selectedIsochrone}，因为中心坐标无效`);
-    }
-};
-
-
-const locateGeoJSON = async (type) => {
-    const selectedFilename = type === 'isochrone' ? selectedIsochroneGeoJSON.value : selectedBlockGeoJSON.value;
     try {
-        const fileObj = type === 'isochrone'
-            ? isochroneGeojsonFiles.value.find(item => item.key === selectedFilename)
-            : filteredBlockGeojsonFiles.value.find(item => item.key === selectedFilename);
-        if (!fileObj) {
-            throw new Error(`File ${selectedFilename} not found in geojsonFiles array.`);
+        if (!selectedIsochroneGeoJSON.value || !selectedTime.value) {
+            throw new Error('请先选择等时圈和时间。');
         }
 
-        const geojsonUrl = `${backendUrl}/api/geojson-files/Nanjing/${encodeURIComponent(fileObj.directory)}/${encodeURIComponent(fileObj.geojson)}`;
-        console.log(`Fetching GeoJSON data from ${geojsonUrl}`);
-        const response = await fetch(geojsonUrl);
+        // 根据选择的时间确定API路径
+        const timeValue = selectedTime.value === '5分钟' ? '_5' : '_10';
+        const isochroneUrl = `${backendUrl}/query/Nanjing/${encodeURIComponent(selectedIsochroneGeoJSON.value)}/${encodeURIComponent(selectedIsochroneGeoJSON.value)}${timeValue}/`;
+        console.log(`Fetching Isochrone GeoJSON from: ${isochroneUrl}`);
+
+        const response = await fetch(isochroneUrl);
         if (!response.ok) {
-            throw new Error(`Failed to fetch ${geojsonUrl}: ${response.statusText}`);
+            throw new Error('Failed to fetch isochrone data');
         }
-        const geojsonData = await response.json();
 
-        await addGeoJSONLayers(geojsonData, fileObj.key);
+        const data = await response.json();
+        console.log('等时圈数据:', data);
 
-        const center = calculateCenter(geojsonData.features || []);
-        if (center) {
-            map.value.flyTo({
-                center: center,
-                zoom: 13,
-                essential: true
-            });
-        } else {
-            console.error(`无法定位到 ${selectedFilename}，因为中心坐标无效`);
-        }
-    } catch (error) {
-        console.error(`Error locating ${selectedFilename}:`, error);
-    }
-};
-
-const toggleBlockVisibility = async () => {
-    if (!selectedIsochroneGeoJSON.value) return;
-
-    const fileObj = isochroneGeojsonFiles.value.find(item => item.key === selectedIsochroneGeoJSON.value);
-    if (!fileObj) return;
-
-    const geojsonUrl = `${backendUrl}/api/geojson-files/Nanjing/${encodeURIComponent(fileObj.directory)}/${encodeURIComponent(fileObj.geojson)}`;
-    console.log(`Fetching GeoJSON data from ${geojsonUrl}`);
-    const response = await fetch(geojsonUrl);
-    if (!response.ok) {
-        console.error(`Failed to fetch ${geojsonUrl}: ${response.statusText}`);
-        return;
-    }
-    const geojsonData = await response.json();
-    const intersectingBlocks = geojsonData.features[0].properties.intersecting_blocks;
-
-    filteredBlockGeojsonFiles.value = blockGeojsonFiles.value.filter(blockFile =>
-        intersectingBlocks.includes(blockFile.geojson.replace('.geojson', ''))
-    );
-
-    const visibility = showBlocks.value ? 'visible' : 'none';
-    filteredBlockGeojsonFiles.value.forEach(async (blockFileObj) => {
-        if (map.value.getLayer(`${blockFileObj.key}-geojson-layer-fill`)) {
-            map.value.setLayoutProperty(`${blockFileObj.key}-geojson-layer-fill`, 'visibility', visibility);
-        } else {
-            // 如果图层不存在，则添加它
-            const blockGeojsonUrl = `${backendUrl}/api/geojson-files/Nanjing/${encodeURIComponent(blockFileObj.directory)}/${encodeURIComponent(blockFileObj.geojson)}`;
-            console.log(`Fetching Block GeoJSON data from ${blockGeojsonUrl}`);
-            const blockResponse = await fetch(blockGeojsonUrl);
-            if (!blockResponse.ok) {
-                console.error(`Failed to fetch ${blockGeojsonUrl}: ${blockResponse.statusText}`);
-                return;
+        // 解析返回的字符串坐标数组
+        let coordinates;
+        try {
+            coordinates = JSON.parse(data[0]);
+            if (!Array.isArray(coordinates) || coordinates.length < 3) {
+                throw new Error('坐标数据无效或点数不足，无法绘制多边形');
             }
-            const blockGeojsonData = await blockResponse.json();
-            await addGeoJSONLayers(blockGeojsonData, blockFileObj.key);
+            console.log('Parsed coordinates:', coordinates);
+
+            // 确保多边形闭合（首尾点相同）
+            if (coordinates[0][0] !== coordinates[coordinates.length - 1][0] ||
+                coordinates[0][1] !== coordinates[coordinates.length - 1][1]) {
+                coordinates.push(coordinates[0]); // 将首点追加到末尾以闭合多边形
+            }
+        } catch (parseError) {
+            console.error('坐标数据解析错误:', parseError);
+            return;
         }
-        if (map.value.getLayer(`${blockFileObj.key}-geojson-layer-line`)) {
-            map.value.setLayoutProperty(`${blockFileObj.key}-geojson-layer-line`, 'visibility', visibility);
-        }
-    });
-};
 
-async function addGeoJSONLayers(geojsonData, sourceId) {
-    if (!map.value) return;
-    let currentPopup;
-
-    console.log(`Adding GeoJSON layers for source ${sourceId}`);
-    if (!map.value.getSource(sourceId)) {
-        map.value.addSource(sourceId, {
-            type: 'geojson',
-            data: geojsonData
-        });
-    } else {
-        map.value.getSource(sourceId).setData(geojsonData);
-    }
-
-    const colorCriteria = selectedColorCriteria.value;
-
-    layerConfigs.forEach(config => {
-        const layerConfig = {
-            ...config,
-            source: sourceId,
-            id: `${sourceId}-${config.id}`,
-            layout: { visibility: 'visible' }
+        // 构建 GeoJSON 数据
+        const geojsonData = {
+            type: 'Feature',
+            geometry: {
+                type: 'Polygon',
+                coordinates: [coordinates] // 需要确保二维数组
+            }
         };
 
-        if (colorCriteria && config.id.includes('fill')) {
-            const fillColor = getColorInterpolation(colorCriteria);
-            if (fillColor) {
-                layerConfig.paint['fill-color'] = fillColor;
-            }
-        } else if (colorCriteria && config.id.includes('line')) {
-            const lineColor = getColorInterpolation(colorCriteria);
-            if (lineColor) {
-                layerConfig.paint['line-color'] = lineColor;
-            }
+        // 添加或更新地图上的图层
+        if (map.value.getSource('isochrone')) {
+            map.value.getSource('isochrone').setData(geojsonData);
         } else {
-            // 设置默认颜色
-            if (config.id.includes('fill')) {
-                layerConfig.paint['fill-color'] = '#90EE90'; // 浅绿色
-            } else if (config.id.includes('line')) {
-                layerConfig.paint['line-color'] = '#006400'; // 深绿色
-            }
-        }
+            map.value.addSource('isochrone', {
+                type: 'geojson',
+                data: geojsonData
+            });
 
-        if (!map.value.getLayer(layerConfig.id)) {
-            map.value.addLayer(layerConfig);
-        } else {
-            // 在设置属性前检查图层是否存在
-            if (layerConfig.paint && layerConfig.paint['fill-color']) {
-                map.value.setPaintProperty(layerConfig.id, 'fill-color', layerConfig.paint['fill-color']);
-            } else if (layerConfig.paint && layerConfig.paint['line-color']) {
-                map.value.setPaintProperty(layerConfig.id, 'line-color', layerConfig.paint['line-color']);
-            }
-        }
-
-        if (config.type !== 'symbol') {
-            map.value.on('contextmenu', layerConfig.id, (e) => {
-                e.preventDefault();
-                if (currentPopup) {
-                    currentPopup.remove();
+            map.value.addLayer({
+                id: 'isochrone-fill',
+                type: 'fill',
+                source: 'isochrone',
+                paint: {
+                    'fill-color': '#888888',
+                    'fill-opacity': 0.5
                 }
-                const properties = e.features[0].properties;
-                const coordinates = e.lngLat;
-                const layerId = `${sourceId}-${config.id}`;
-                const csvHtmlContent = layerCsvContentMap.get(layerId);
-                currentPopup = new maplibregl.Popup()
-                    .setLngLat([coordinates.lng, coordinates.lat])
-                    .setHTML(csvHtmlContent)
-                    .addTo(map.value);
+            });
+
+            map.value.addLayer({
+                id: 'isochrone-line',
+                type: 'line',
+                source: 'isochrone',
+                paint: {
+                    'line-color': '#000000',
+                    'line-width': 2
+                }
             });
         }
-    });
 
-    // 确保图标加载
-    if (!map.value.hasImage('custom-pin')) {
-        map.value.loadImage(`${backendUrl}/static/images/underground2.png`, (error, image) => {
-            if (error) {
-                console.error('Error loading image:', error);
-                return;
-            }
-            if (!map.value.hasImage('custom-pin')) {
-                map.value.addImage('custom-pin', image);
+        // 手动计算边界并适应视图
+        let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+
+        coordinates.forEach(([lng, lat]) => {
+            if (typeof lng === 'number' && typeof lat === 'number') {
+                minLng = Math.min(minLng, lng);
+                minLat = Math.min(minLat, lat);
+                maxLng = Math.max(maxLng, lng);
+                maxLat = Math.max(maxLat, lat);
             }
         });
-    }
-}
 
-
-function formatCSVAsHTML(csvText) {
-    const rows = csvText.trim().split('\n').map(row => {
-        let match;
-        const cells = [];
-        const regex = /(".*?"|[^",]+)(,|$)/g;
-        while ((match = regex.exec(row)) !== null) {
-            let cell = match[1].replace(/^"|"$/g, '');
-            cells.push(cell);
+        if (minLng === Infinity || minLat === Infinity || maxLng === -Infinity || maxLat === -Infinity) {
+            console.warn('手动计算的边界值无效，无法进行 fitBounds');
+        } else {
+            map.value.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 20, maxZoom: 14 });
         }
-        return cells;
+
+        // 获取当前等时圈下的地块名称
+        const blockUrl = `${backendUrl}/query/Nanjing/${encodeURIComponent(selectedIsochroneGeoJSON.value)}/${encodeURIComponent(selectedIsochroneGeoJSON.value)}${timeValue}/block/`;
+        const blockResponse = await fetch(blockUrl);
+        if (!blockResponse.ok) {
+            throw new Error('Failed to fetch block data');
+        }
+        blockNames.value = await blockResponse.json();
+        console.log('Fetched blocks:', blockNames.value);
+
+        // 获取地块的属性并更新颜色
+        updateBlockColors();
+
+    } catch (error) {
+        console.error('加载等时圈数据时出错:', error);
+    }
+};
+
+// 隐藏并移除当前等时圈所属的地块图层
+const hideAndRemoveCurrentBlocks = () => {
+    blockNames.value.forEach(block => {
+        const colorLayerId = `block-fill-${block}`;
+        if (map.value.getLayer(colorLayerId)) {
+            map.value.removeLayer(colorLayerId);
+        }
+        if (map.value.getSource(colorLayerId)) {
+            map.value.removeSource(colorLayerId);
+        }
     });
+    blockNames.value = []; // 清空当前地块名称列表
+};
 
-    const columns = rows[0] ? rows[0].map((_, i) => rows.map(row => row[i])) : [];
+// 更新地块颜色
+const updateBlockColors = async () => {
+    try {
+        const timeValue = selectedTime.value === '5分钟' ? '_5' : '_10';
 
-    const htmlLines = columns.map(column => {
-        return `<p>${column.join(':')}</p>`;
-    }).join('');
+        // 统一获取所有地块的坐标和属性
+        const locationPromises = blockNames.value.map(block => {
+            const locationUrl = `${backendUrl}/query/Nanjing/${encodeURIComponent(selectedIsochroneGeoJSON.value)}/${encodeURIComponent(selectedIsochroneGeoJSON.value)}${timeValue}/${encodeURIComponent(block)}/location`;
+            return fetch(locationUrl).then(res => res.json());
+        });
 
-    return htmlLines;
-}
+        const propertyUrl = `${backendUrl}/query/Nanjing/${encodeURIComponent(selectedIsochroneGeoJSON.value)}/${encodeURIComponent(selectedIsochroneGeoJSON.value)}${timeValue}/block/${encodeURIComponent(selectedProperty.value)}`;
+        const propertyResponse = await fetch(propertyUrl);
+        if (!propertyResponse.ok) {
+            throw new Error(`Failed to fetch ${selectedProperty.value} for blocks`);
+        }
+        const propertyValues = await propertyResponse.json();
 
-function getColorInterpolation(criteria) {
+        const locations = await Promise.all(locationPromises);
+
+        // 批量更新所有地块的颜色
+        blockNames.value.forEach((block, index) => {
+            const locationData = locations[index];
+            if (!locationData || !locationData[0]) {
+                console.error(`Invalid location data for block: ${block}`);
+                return;
+            }
+
+            const property = propertyValues[index] ? parseFloat(propertyValues[index]) : 0; // 如果获取不到值，默认为 0
+
+            const geojsonBlockData = {
+                type: 'Feature',
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [JSON.parse(locationData[0])] // 地块坐标
+                },
+                properties: {
+                    [selectedProperty.value]: property // 动态设置属性值
+                }
+            };
+
+            const colorLayerId = `block-fill-${block}`;
+            if (!map.value.getSource(colorLayerId)) {
+                map.value.addSource(colorLayerId, {
+                    type: 'geojson',
+                    data: geojsonBlockData
+                });
+
+                map.value.addLayer({
+                    id: colorLayerId,
+                    type: 'fill',
+                    source: colorLayerId,
+                    paint: {
+                        'fill-color': getColorInterpolation(selectedProperty.value), // 根据选择的属性动态应用颜色
+                        'fill-opacity': showBlocks.value ? 0.6 : 0 // 根据滑块控制显示和隐藏
+                    }
+                });
+            } else {
+                map.value.getSource(colorLayerId).setData(geojsonBlockData);
+                map.value.setPaintProperty(colorLayerId, 'fill-color', getColorInterpolation(selectedProperty.value));
+                map.value.setPaintProperty(colorLayerId, 'fill-opacity', showBlocks.value ? 0.6 : 0);
+            }
+        });
+    } catch (error) {
+        console.error('更新地块颜色时出错:', error);
+    }
+};
+
+
+// 切换地块显示/隐藏状态
+const toggleBlockVisibility = () => {
+    blockNames.value.forEach(block => {
+        const colorLayerId = `block-fill-${block}`;
+        if (map.value.getLayer(colorLayerId)) {
+            map.value.setPaintProperty(colorLayerId, 'fill-opacity', showBlocks.value ? 0.6 : 0);
+        }
+    });
+};
+
+const getColorInterpolation = (criteria) => {
     switch (criteria) {
         case 'floorAreaRatio':
             return [
@@ -520,59 +357,6 @@ function getColorInterpolation(criteria) {
         default:
             return null;
     }
-}
-
-function getFloorAreaRatioColors() {
-    return [
-        0.0, 'rgb(250,209,209)',
-        1.0, 'rgb(246,162,163)',
-        5.0, 'rgb(241,116,116)',
-        10.0, 'rgb(238,69,68)',
-        15.0, 'rgb(233,32,24)',
-        1000.0, 'rgb(255,255,255)' // 用于定义最大值以上的颜色
-    ];
-}
-
-function getBuildingDensityColors() {
-    return [
-        0.0, 'rgb(245,230,208)',
-        0.2, 'rgb(235,205,160)',
-        0.4, 'rgb(225,179,111)',
-        0.6, 'rgb(215,152,62)',
-        0.8, 'rgb(205,127,16)',
-        1.0, 'rgb(205,127,16)',
-        10.0, 'rgb(255,255,255)' // 用于定义最大值以上的颜色
-    ];
-}
-
-function getBuildingHeightColors() {
-    return [
-        0.0, 'rgb(253,252,230)',
-        10.0, 'rgb(250,249,205)',
-        30.0, 'rgb(247,244,168)',
-        50.0, 'rgb(243,240,129)',
-        100.0, 'rgb(241,235,90)',
-        150.0, 'rgb(238,230,50)',
-        200.0, 'rgb(235,224,10)',
-        1000.0, 'rgb(255,255,255)' // 用于定义最大值以上的颜色
-    ];
-}
-
-const updateBlockColors = async () => {
-    const colorCriteria = selectedColorCriteria.value;
-    if (!colorCriteria) return;
-
-    filteredBlockGeojsonFiles.value.forEach(async (blockFileObj) => {
-        if (map.value.getLayer(`${blockFileObj.key}-geojson-layer-fill`)) {
-            map.value.setPaintProperty(`${blockFileObj.key}-geojson-layer-fill`, 'fill-color', [
-                'interpolate',
-                ['linear'],
-                ['get', colorCriteria],
-                ...(colorCriteria === 'floorAreaRatio' ? getFloorAreaRatioColors() :
-                    colorCriteria === 'buildingDensity' ? getBuildingDensityColors() : getBuildingHeightColors())
-            ]);
-        }
-    });
 };
 </script>
 
@@ -591,36 +375,34 @@ const updateBlockColors = async () => {
     left: 0;
 }
 
-.geojson-selector {
+.control-panel {
     position: absolute;
+    top: 10px;
     left: 10px;
     z-index: 1000;
-    width: 240px;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     background-color: #ffffff;
-    color: #333;
+    width: 100%;
+    max-width: 800px;
 }
 
-.geojson-selector.isochrone-selector {
-    top: 10px;
-    width: 300px;
+.selector-container {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    /* 保证组件垂直居中对齐 */
+    flex-wrap: nowrap;
+    /* 防止组件换行 */
 }
 
-.geojson-selector.block-selector {
-    top: 50px;
-    width: 300px;
-}
-
-.color-criteria-selector {
-    top: 90px;
-    left: 10px;
-    width: 300px;
+.geojson-selector {
+    flex: 1;
 }
 
 .block-visibility-toggle {
-    top: 100px;
-    left: 10px;
+    margin-top: 15px;
 }
 
 .el-select .el-input {
@@ -630,19 +412,5 @@ const updateBlockColors = async () => {
 .el-select-dropdown {
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.draggable-select {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    z-index: 1000;
-    cursor: grab;
-}
-
-.selector-container {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
 }
 </style>
