@@ -98,7 +98,7 @@ onMounted(async () => {
 // 监听等时圈和时间选择的变化
 watch([selectedIsochroneGeoJSON, selectedTime], async ([newIsochrones, newTime], [oldIsochrones]) => {
     // 找出取消选择的等时圈
-    const removedIsochrones = oldIsochrones ? oldIsochrones.filter(isochrone => !newIsochrones.includes(isochrone)) : [];
+    const removedIsochrones = oldIsochrones.filter(isochrone => !newIsochrones.includes(isochrone));
 
     // 卸载取消选择的等时圈及相关地块
     removedIsochrones.forEach(isochrone => {
@@ -108,10 +108,9 @@ watch([selectedIsochroneGeoJSON, selectedTime], async ([newIsochrones, newTime],
     // 加载新的等时圈
     if (newIsochrones.length && newTime) {
         let allCoordinates = [];
-        let allGeojsonData = []; // 用于存储所有等时圈的 GeoJSON 数据
 
         for (const isochrone of newIsochrones) {
-            await loadIsochroneAndBlocks(isochrone, allCoordinates, allGeojsonData);
+            await loadIsochroneAndBlocks(isochrone, allCoordinates);
         }
 
         // 手动计算边界并适应视图
@@ -127,7 +126,9 @@ watch([selectedIsochroneGeoJSON, selectedTime], async ([newIsochrones, newTime],
                 }
             });
 
-            if (minLng !== Infinity && minLat !== Infinity && maxLng !== -Infinity && maxLat !== -Infinity) {
+            if (minLng === Infinity || minLat === Infinity || maxLng === -Infinity || maxLat === -Infinity) {
+                console.warn('手动计算的边界值无效，无法进行 fitBounds');
+            } else {
                 nextTick(() => {
                     try {
                         map.value.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 20, maxZoom: 14 });
@@ -135,22 +136,14 @@ watch([selectedIsochroneGeoJSON, selectedTime], async ([newIsochrones, newTime],
                         console.error('Error during fitBounds execution:', fitBoundsError);
                     }
                 });
-            } else {
-                console.warn('手动计算的边界值无效，无法进行 fitBounds');
             }
-        }
-
-        // 计算交集并绘制
-        if (allGeojsonData.length > 1) {
-            drawIntersection(allGeojsonData);
         }
     }
 });
 
-// loadIsochroneAndBlocks 函数
-const loadIsochroneAndBlocks = async (isochrone, allCoordinates, allGeojsonData) => {
-    let geojsonData; // 将 geojsonData 提升到函数作用域
 
+// 定义 loadIsochroneAndBlocks 函数
+const loadIsochroneAndBlocks = async (isochrone, allCoordinates) => {
     try {
         if (!isochrone || !selectedTime.value) {
             throw new Error('请先选择等时圈和时间。');
@@ -185,22 +178,19 @@ const loadIsochroneAndBlocks = async (isochrone, allCoordinates, allGeojsonData)
 
             // 将当前等时圈的坐标添加到所有坐标数组中
             allCoordinates.push(...coordinates);
-
-            // 构建 GeoJSON 数据
-            geojsonData = {
-                type: 'Feature',
-                geometry: {
-                    type: 'Polygon',
-                    coordinates: [coordinates]
-                }
-            };
-
-            // 添加到 allGeojsonData 中
-            allGeojsonData.push(geojsonData);
         } catch (parseError) {
             console.error('坐标数据解析错误:', parseError);
             return;
         }
+
+        // 构建 GeoJSON 数据
+        const geojsonData = {
+            type: 'Feature',
+            geometry: {
+                type: 'Polygon',
+                coordinates: [coordinates]
+            }
+        };
 
         // 添加或更新地图上的图层
         const layerId = `isochrone-layer-${isochrone}`;
@@ -245,92 +235,59 @@ const loadIsochroneAndBlocks = async (isochrone, allCoordinates, allGeojsonData)
         console.log(`Fetched blocks for ${isochrone}:`, blockNames.value[isochrone]);
 
         // 计算交集并绘制
-        drawIntersection(allGeojsonData);
+        drawIntersection(geojsonData);
 
         // 获取地块的属性并更新颜色
         updateBlockColors();
+
     } catch (error) {
         console.error('加载等时圈数据时出错:', error);
     }
 };
 
-
-// 计算并绘制交集
-const drawIntersection = (allGeojsonData) => {
+// 计算并绘制等时圈的交集
+const drawIntersection = (isochronesData) => {
     try {
-        console.log('allGeojsonData:', allGeojsonData);
-
-        // 过滤掉无效的几何体
-        const validGeometries = allGeojsonData.filter(data => 
-            data && 
-            data.geometry && 
-            data.geometry.type === 'Polygon' && 
-            data.geometry.coordinates.length > 0
-        );
-
-        // 检查是否至少有两个有效的等时圈数据
-        if (validGeometries.length < 2) {
+        // 检查 isochronesData 是否为数组
+        if (!Array.isArray(isochronesData) || isochronesData.length < 2) {
             console.warn('至少需要两个等时圈才能计算交集');
             return;
         }
 
-        // 遍历并检查自交情况
-        validGeometries.forEach((geometry, index) => {
-            const kinks = turf.kinks(geometry);
-            if (kinks.features.length > 0) {
-                console.warn(`Geometry ${index} 存在自交，将跳过此多边形。`);
-                return; // 跳过自交多边形
+        let intersection = isochronesData.reduce((intersectedArea, currentPolygon) => {
+            if (!intersectedArea) {
+                return currentPolygon;
             }
-            console.log(`Geometry ${index}:`, JSON.stringify(geometry));
-        });
-
-        // 计算交集
-        let intersection = validGeometries.reduce((accumulated, current) => {
-            if (!accumulated) return current; // 第一次迭代
-
-            console.log('Current accumulated geometry:', JSON.stringify(accumulated));
-            console.log('Current geometry:', JSON.stringify(current));
-
-            // 计算交集
-            const result = turf.intersect(accumulated, current);
-            if (!result) {
-                console.warn('两个几何体之间没有交集');
-                return accumulated; // 没有交集，返回 accumulated 以继续尝试下一个
-            }
-
-            return result;
+            return turf.intersect(intersectedArea, currentPolygon);
         }, null);
 
-        if (!intersection) {
-            console.warn('未找到交集');
-            return;
-        }
+        if (intersection) {
+            const intersectionLayerId = 'intersection-layer';
+            if (map.value.getSource(intersectionLayerId)) {
+                map.value.getSource(intersectionLayerId).setData(intersection);
+            } else {
+                map.value.addSource(intersectionLayerId, {
+                    type: 'geojson',
+                    data: intersection,
+                });
 
-        // 绘制交集
-        const intersectionLayerId = 'intersection-layer';
-        if (map.value.getSource(intersectionLayerId)) {
-            map.value.getSource(intersectionLayerId).setData(intersection);
+                map.value.addLayer({
+                    id: intersectionLayerId,
+                    type: 'fill',
+                    source: intersectionLayerId,
+                    paint: {
+                        'fill-color': '#FF0000',
+                        'fill-opacity': 0.5,
+                    },
+                });
+            }
         } else {
-            map.value.addSource(intersectionLayerId, {
-                type: 'geojson',
-                data: intersection
-            });
-
-            map.value.addLayer({
-                id: intersectionLayerId,
-                type: 'fill',
-                source: intersectionLayerId,
-                paint: {
-                    'fill-color': '#ff0000',
-                    'fill-opacity': 0.5
-                }
-            });
+            console.warn('未找到交集区域');
         }
     } catch (error) {
         console.error('绘制交集时出错:', error);
     }
 };
-
 
 // 隐藏并移除当前等时圈所属的地块图层
 const hideAndRemoveCurrentBlocks = (isochrone) => {

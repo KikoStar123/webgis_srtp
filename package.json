@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@maptiler/sdk": "^1.2.1",
+    "@turf/turf": "^7.1.0",
     "axios": "^1.7.4",
     "cors": "^2.8.5",
     "element-plus": "^2.5.6",
