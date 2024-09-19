@@ -58,6 +58,9 @@ const blockNames = ref({}); // 存储每个等时圈对应的地块名称列表
 const properties = ref(['floorAreaRatio', 'buildingDensity', 'avgHeight']); // 地块属性列表
 const backendUrl = "http://47.101.210.178:3001"; // 调用全局分配的域名地址
 let lastSelectedIsochrones = []; // 用于缓存上次计算交集的等时圈集合
+// 入口数据可视化相关
+const entranceMarkers = []; // 用于存储入口的标记，以便清除
+const entranceMarkersMap = {}; // 用于存储每个等时圈的入口标记
 
 
 
@@ -86,6 +89,7 @@ onMounted(async () => {
     });
 
     try {
+        // 获取站点数据
         const response = await fetch(`${backendUrl}/query/Nanjing/station`);
         if (!response.ok) {
             throw new Error('Failed to fetch station data');
@@ -95,19 +99,27 @@ onMounted(async () => {
             key: station,
             geojson: station
         }));
+
+        // 加载第一个站点的出入口数据作为默认显示
+        if (stations.length > 0) {
+            await loadStationEntrances(stations[0]);
+        }
     } catch (error) {
         console.error('Error fetching station data:', error);
     }
 });
+
+
 
 // 监听等时圈和时间选择的变化
 watch([selectedIsochroneGeoJSON, selectedTime], async ([newIsochrones, newTime], [oldIsochrones, oldTime]) => {
     // 找出取消选择的等时圈
     const removedIsochrones = oldIsochrones ? oldIsochrones.filter(isochrone => !newIsochrones.includes(isochrone)) : [];
 
-    // 卸载取消选择的等时圈及相关地块
+    // 卸载取消选择的等时圈及相关地块和入口
     removedIsochrones.forEach(isochrone => {
         hideAndRemoveCurrentBlocks(isochrone);
+        unloadStationEntrances(isochrone); // 卸载入口
     });
 
     // 如果新的选择集合与上次的缓存集合相同，则不重新计算交集
@@ -123,6 +135,7 @@ watch([selectedIsochroneGeoJSON, selectedTime], async ([newIsochrones, newTime],
 
         for (const isochrone of newIsochrones) {
             await loadIsochroneAndBlocks(isochrone, allCoordinates, allGeojsonData);
+            await loadStationEntrances(isochrone); // 加载入口
         }
 
         // 手动计算边界并适应视图
@@ -162,6 +175,8 @@ watch([selectedIsochroneGeoJSON, selectedTime], async ([newIsochrones, newTime],
         lastSelectedIsochrones = []; // 清空缓存
     }
 });
+
+
 
 // 用于比较两个数组是否相等的函数
 const arraysEqual = (arr1, arr2) => {
@@ -555,6 +570,84 @@ const getColorInterpolation = (criteria) => {
             return null;
     }
 };
+
+// 加载站点出入口
+const loadStationEntrances = async (isochrone) => {
+    try {
+        const city = 'Nanjing'; // 替换为实际城市名称
+        const entranceUrl = `${backendUrl}/query/${city}/${encodeURIComponent(isochrone)}/entrance_locations`;
+
+        const response = await fetch(entranceUrl);
+        if (!response.ok) {
+            throw new Error('Failed to fetch entrance locations');
+        }
+        const entrances = await response.json();
+
+        // 解析并可视化出入口
+        visualizeEntrances(isochrone, entrances);
+    } catch (error) {
+        console.error('Error fetching entrance locations:', error);
+    }
+};
+
+// 可视化出入口
+const visualizeEntrances = (isochrone, entrances) => {
+    // 清除之前该等时圈的入口标记
+    if (entranceMarkersMap[isochrone]) {
+        entranceMarkersMap[isochrone].forEach(marker => marker.remove());
+    }
+
+    // 处理坐标数据
+    let coordinates;
+    try {
+        const formattedData = entrances[0]
+            .replace(/\(/g, '[')
+            .replace(/\)/g, ']')
+            .replace(/\'/g, '"');
+
+        coordinates = JSON.parse(formattedData); // 解析为 JSON 数组
+    } catch (parseError) {
+        console.error('坐标数据解析错误:', parseError);
+        return;
+    }
+
+    // 创建新的入口标记数组
+    const markers = [];
+    coordinates.forEach(([lng, lat]) => {
+        if (typeof lng === 'number' && typeof lat === 'number') {
+            // 添加点到地图上
+            const marker = new maplibregl.Marker({ color: 'red' })
+                .setLngLat([lng, lat])
+                .addTo(map.value);
+
+            // 添加点击事件以显示站点名称
+            marker.getElement().addEventListener('click', () => {
+                new maplibregl.Popup()
+                    .setLngLat([lng, lat])
+                    .setHTML(`<strong>站点名称:</strong> ${isochrone}`)
+                    .addTo(map.value);
+            });
+
+            // 存储标记
+            markers.push(marker);
+        }
+    });
+
+    // 将该等时圈的入口标记存储到对象中
+    entranceMarkersMap[isochrone] = markers;
+};
+
+
+// 卸载等时圈对应的入口
+const unloadStationEntrances = (isochrone) => {
+    if (entranceMarkersMap[isochrone]) {
+        entranceMarkersMap[isochrone].forEach(marker => marker.remove());
+        delete entranceMarkersMap[isochrone]; // 移除存储的入口标记
+    }
+};
+
+
+
 </script>
 
 <style scoped>
