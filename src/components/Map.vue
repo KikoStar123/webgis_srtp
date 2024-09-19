@@ -39,7 +39,9 @@ import '@maptiler/sdk/dist/maptiler-sdk.css';
 import maplibregl from 'maplibre-gl';
 import { ElSelect, ElOption, ElSwitch, ElRadioGroup, ElRadioButton } from 'element-plus';
 import { nextTick } from 'vue'; 
-import * as turf from '@turf/turf'; // 导入 turf.js 库
+//import * as turf from '@turf/turf'; // 导入 turf.js 库
+//import jsts from 'jsts'; // 导入 JSTS 库
+import * as jsts from 'jsts/dist/jsts.min.js';
 import 'element-plus/dist/index.css';
 
 config.apiKey = 'nMI0OagfwxzpRVopD5sR';
@@ -55,6 +57,9 @@ const showBlocks = ref(false); // 控制地块显示开关
 const blockNames = ref({}); // 存储每个等时圈对应的地块名称列表
 const properties = ref(['floorAreaRatio', 'buildingDensity', 'avgHeight']); // 地块属性列表
 const backendUrl = "http://47.101.210.178:3001"; // 调用全局分配的域名地址
+let lastSelectedIsochrones = []; // 用于缓存上次计算交集的等时圈集合
+
+
 
 onMounted(async () => {
     const initialState = { lng: 116.2, lat: 39.5, zoom: 7 };
@@ -96,7 +101,7 @@ onMounted(async () => {
 });
 
 // 监听等时圈和时间选择的变化
-watch([selectedIsochroneGeoJSON, selectedTime], async ([newIsochrones, newTime], [oldIsochrones]) => {
+watch([selectedIsochroneGeoJSON, selectedTime], async ([newIsochrones, newTime], [oldIsochrones, oldTime]) => {
     // 找出取消选择的等时圈
     const removedIsochrones = oldIsochrones ? oldIsochrones.filter(isochrone => !newIsochrones.includes(isochrone)) : [];
 
@@ -105,7 +110,13 @@ watch([selectedIsochroneGeoJSON, selectedTime], async ([newIsochrones, newTime],
         hideAndRemoveCurrentBlocks(isochrone);
     });
 
-    // 加载新的等时圈
+    // 如果新的选择集合与上次的缓存集合相同，则不重新计算交集
+    if (arraysEqual(newIsochrones, lastSelectedIsochrones) && newTime === oldTime) {
+        console.log('选择的等时圈与之前相同，跳过重新计算交集。');
+        return;
+    }
+
+    // 加载新的等时圈或时间发生变化时，重新加载
     if (newIsochrones.length && newTime) {
         let allCoordinates = [];
         let allGeojsonData = []; // 用于存储所有等时圈的 GeoJSON 数据
@@ -140,26 +151,38 @@ watch([selectedIsochroneGeoJSON, selectedTime], async ([newIsochrones, newTime],
             }
         }
 
-        // 计算交集并绘制
-        if (allGeojsonData.length > 1) {
-            drawIntersection(allGeojsonData);
-        }
+        // 调用 drawIntersection 重新计算和绘制交集
+        drawIntersection(allGeojsonData);
+
+        // 更新缓存
+        lastSelectedIsochrones = [...newIsochrones];
+    } else {
+        // 如果没有有效的等时圈，清空当前交集
+        clearIntersectionLayer();
+        lastSelectedIsochrones = []; // 清空缓存
     }
 });
 
+// 用于比较两个数组是否相等的函数
+const arraysEqual = (arr1, arr2) => {
+    if (arr1.length !== arr2.length) return false;
+    return arr1.every((value, index) => value === arr2[index]);
+};
+
+
+
 // loadIsochroneAndBlocks 函数
 const loadIsochroneAndBlocks = async (isochrone, allCoordinates, allGeojsonData) => {
-    let geojsonData; // 将 geojsonData 提升到函数作用域
+    let geojsonData;
 
     try {
         if (!isochrone || !selectedTime.value) {
             throw new Error('请先选择等时圈和时间。');
         }
 
-        // 根据选择的时间确定API路径
+        // 根据选择的时间确定 API 路径
         const timeValue = selectedTime.value === '5分钟' ? '_5' : '_10';
         const isochroneUrl = `${backendUrl}/query/Nanjing/${encodeURIComponent(isochrone)}/${encodeURIComponent(isochrone)}${timeValue}/`;
-        console.log(`Fetching Isochrone GeoJSON from: ${isochroneUrl}`);
 
         const response = await fetch(isochroneUrl);
         if (!response.ok) {
@@ -172,18 +195,17 @@ const loadIsochroneAndBlocks = async (isochrone, allCoordinates, allGeojsonData)
         // 解析返回的字符串坐标数组
         let coordinates;
         try {
-            coordinates = JSON.parse(data[0]);
+            coordinates = JSON.parse(data[0]); // 解析 JSON 字符串为数组
             if (!Array.isArray(coordinates) || coordinates.length < 3) {
                 throw new Error('坐标数据无效或点数不足，无法绘制多边形');
             }
 
-            // 确保多边形闭合（首尾点相同）
+            // 确保多边形闭合
             if (coordinates[0][0] !== coordinates[coordinates.length - 1][0] ||
                 coordinates[0][1] !== coordinates[coordinates.length - 1][1]) {
                 coordinates.push(coordinates[0]);
             }
 
-            // 将当前等时圈的坐标添加到所有坐标数组中
             allCoordinates.push(...coordinates);
 
             // 构建 GeoJSON 数据
@@ -195,14 +217,13 @@ const loadIsochroneAndBlocks = async (isochrone, allCoordinates, allGeojsonData)
                 }
             };
 
-            // 添加到 allGeojsonData 中
             allGeojsonData.push(geojsonData);
         } catch (parseError) {
             console.error('坐标数据解析错误:', parseError);
             return;
         }
 
-        // 添加或更新地图上的图层
+        // 绘制或更新地图上的图层
         const layerId = `isochrone-layer-${isochrone}`;
         if (map.value.getSource(layerId)) {
             map.value.getSource(layerId).setData(geojsonData);
@@ -233,103 +254,127 @@ const loadIsochroneAndBlocks = async (isochrone, allCoordinates, allGeojsonData)
             });
         }
 
-        // 获取当前等时圈下的地块名称
+        // 获取地块名称
         const blockUrl = `${backendUrl}/query/Nanjing/${encodeURIComponent(isochrone)}/${encodeURIComponent(isochrone)}${timeValue}/block/`;
         const blockResponse = await fetch(blockUrl);
         if (!blockResponse.ok) {
             throw new Error('Failed to fetch block data');
         }
 
-        // 确保 blockNames.value[isochrone] 被初始化为数组
         blockNames.value[isochrone] = await blockResponse.json() || [];
-        console.log(`Fetched blocks for ${isochrone}:`, blockNames.value[isochrone]);
 
         // 计算交集并绘制
         drawIntersection(allGeojsonData);
 
-        // 获取地块的属性并更新颜色
+        // 更新地块颜色
         updateBlockColors();
     } catch (error) {
         console.error('加载等时圈数据时出错:', error);
     }
 };
 
-
-// 计算并绘制交集
+//绘制交集
 const drawIntersection = (allGeojsonData) => {
-    try {
-        console.log('allGeojsonData:', allGeojsonData);
+    // 清除上次计算的交集图层
+    clearIntersectionLayer();
 
-        // 过滤掉无效的几何体
-        const validGeometries = allGeojsonData.filter(data => 
-            data && 
-            data.geometry && 
-            data.geometry.type === 'Polygon' && 
-            data.geometry.coordinates.length > 0
-        );
+    // 直接重新计算所有交集
+    calculateFullIntersection(allGeojsonData);
+};
 
-        // 检查是否至少有两个有效的等时圈数据
-        if (validGeometries.length < 2) {
-            console.warn('至少需要两个等时圈才能计算交集');
-            return;
-        }
 
-        // 遍历并检查自交情况
-        validGeometries.forEach((geometry, index) => {
-            const kinks = turf.kinks(geometry);
-            if (kinks.features.length > 0) {
-                console.warn(`Geometry ${index} 存在自交，将跳过此多边形。`);
-                return; // 跳过自交多边形
-            }
-            console.log(`Geometry ${index}:`, JSON.stringify(geometry));
-        });
 
-        // 计算交集
-        let intersection = validGeometries.reduce((accumulated, current) => {
-            if (!accumulated) return current; // 第一次迭代
+// 重新计算所有交集的函数
+const calculateFullIntersection = (allGeojsonData) => {
+    const reader = new jsts.io.GeoJSONReader();
+    const writer = new jsts.io.GeoJSONWriter();
 
-            console.log('Current accumulated geometry:', JSON.stringify(accumulated));
-            console.log('Current geometry:', JSON.stringify(current));
+    // 检查是否有至少两个图层，如果没有则不计算交集
+    if (allGeojsonData.length < 2) {
+        console.log('少于两个图层，无法计算交集。');
+        return;
+    }
 
-            // 计算交集
-            const result = turf.intersect(accumulated, current);
-            if (!result) {
-                console.warn('两个几何体之间没有交集');
-                return accumulated; // 没有交集，返回 accumulated 以继续尝试下一个
-            }
+    // 初始化交集为空，并设置找到交集的标志
+    let intersection = null;
+    let foundIntersection = false;
 
-            return result;
-        }, null);
+    // 计算交集
+    for (let i = 0; i < allGeojsonData.length; i++) {
+        const currentPolygon = reader.read(allGeojsonData[i].geometry);
+        try {
+            if (!intersection) {
+                // 第一次设置交集为第一个多边形
+                intersection = currentPolygon;
+            } else if (intersection.intersects(currentPolygon)) {
+                // 计算与已有交集的重叠部分
+                intersection = intersection.intersection(currentPolygon);
 
-        if (!intersection) {
-            console.warn('未找到交集');
-            return;
-        }
-
-        // 绘制交集
-        const intersectionLayerId = 'intersection-layer';
-        if (map.value.getSource(intersectionLayerId)) {
-            map.value.getSource(intersectionLayerId).setData(intersection);
-        } else {
-            map.value.addSource(intersectionLayerId, {
-                type: 'geojson',
-                data: intersection
-            });
-
-            map.value.addLayer({
-                id: intersectionLayerId,
-                type: 'fill',
-                source: intersectionLayerId,
-                paint: {
-                    'fill-color': '#ff0000',
-                    'fill-opacity': 0.5
+                // 检查交集是否为空
+                if (intersection.isEmpty()) {
+                    console.warn('交集为空，停止计算。');
+                    intersection = null;
+                    break;
                 }
-            });
+
+                // 设置找到交集的标志
+                foundIntersection = true;
+            } else {
+                console.warn('当前多边形与已有交集不重叠，跳过该多边形。');
+            }
+        } catch (error) {
+            console.error(`交集计算失败:`, error);
+            return;
         }
-    } catch (error) {
-        console.error('绘制交集时出错:', error);
+    }
+
+    // 检查最终交集是否为空，或者未找到有效交集
+    if (!intersection || !foundIntersection) {
+        console.log('没有有效的交集，不进行渲染。');
+        return;
+    }
+
+    // 将交集结果转换为 GeoJSON
+    const intersectionGeoJson = writer.write(intersection);
+
+    // 绘制新的交集图层
+    map.value.addSource('intersection-layer', {
+        type: 'geojson',
+        data: intersectionGeoJson
+    });
+
+    map.value.addLayer({
+        id: 'intersection-layer',
+        type: 'fill',
+        source: 'intersection-layer',
+        paint: {
+            'fill-color': '#ff0000',
+            'fill-opacity': 0.6
+        }
+    });
+
+    map.value.addLayer({
+        id: 'intersection-layer-line',
+        type: 'line',
+        source: 'intersection-layer',
+        paint: {
+            'line-color': '#000000',
+            'line-width': 2
+        }
+    });
+};
+
+
+// 清除交集图层
+const clearIntersectionLayer = () => {
+    const intersectionLayerId = 'intersection-layer';
+    if (map.value.getSource(intersectionLayerId)) {
+        map.value.removeLayer(intersectionLayerId);
+        map.value.removeLayer(`${intersectionLayerId}-line`);
+        map.value.removeSource(intersectionLayerId);
     }
 };
+
 
 
 // 隐藏并移除当前等时圈所属的地块图层
