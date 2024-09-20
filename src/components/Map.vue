@@ -616,9 +616,10 @@ const visualizeEntrances = (isochrone, entrances) => {
     const markers = [];
     coordinates.forEach(([lng, lat]) => {
         if (typeof lng === 'number' && typeof lat === 'number') {
-            // 添加点到地图上
-            const marker = new maplibregl.Marker({ color: 'red' })
+            // 添加点到地图上，带有标题
+            const marker = new maplibregl.Marker({ color: 'red', title: 'Entrance Marker' }) // 设置标题
                 .setLngLat([lng, lat])
+                .setPopup(new maplibregl.Popup().setText(`Entrance at ${lng}, ${lat}`)) // 添加弹出窗口
                 .addTo(map.value);
 
             // 添加点击事件以显示站点名称
