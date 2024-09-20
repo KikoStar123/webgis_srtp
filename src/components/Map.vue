@@ -3,6 +3,12 @@
         <div class="map" ref="mapContainer"></div>
         <div class="control-panel">
             <div class="selector-container">
+                <!-- 城市选择框 -->
+                <ElSelect v-model="selectedCity" class="city-selector" placeholder="请选择城市" filterable @change="onCityChange">
+                    <ElOption v-for="city in cities" :key="city" :label="city" :value="city">
+                    </ElOption>
+                </ElSelect>
+
                 <!-- 时间选择按钮组 -->
                 <ElRadioGroup v-model="selectedTime" class="time-selector">
                     <ElRadioButton label="5分钟">5分钟</ElRadioButton>
@@ -10,23 +16,19 @@
                 </ElRadioGroup>
 
                 <!-- 等时圈选择框 -->
-                <ElSelect v-model="selectedIsochroneGeoJSON" class="geojson-selector" placeholder="请选择等时圈数据" filterable
-                    multiple>
-                    <ElOption v-for="fileObj in isochroneGeojsonFiles" :key="fileObj.key"
-                        :label="fileObj.geojson.replace('.geojson', '')" :value="fileObj.key">
+                <ElSelect v-model="selectedIsochroneGeoJSON" class="geojson-selector" placeholder="请选择等时圈数据" filterable multiple>
+                    <ElOption v-for="fileObj in isochroneGeojsonFiles" :key="fileObj.key" :label="fileObj.geojson.replace('.geojson', '')" :value="fileObj.key">
                     </ElOption>
                 </ElSelect>
 
                 <!-- 地块属性选择框 -->
-                <ElSelect v-model="selectedProperty" class="geojson-selector" placeholder="请选择地块属性" filterable
-                    @change="updateBlockColors">
+                <ElSelect v-model="selectedProperty" class="geojson-selector" placeholder="请选择地块属性" filterable @change="updateBlockColors">
                     <ElOption v-for="property in properties" :key="property" :label="property" :value="property">
                     </ElOption>
                 </ElSelect>
 
                 <!-- 地块显示/隐藏开关 -->
-                <ElSwitch v-model="showBlocks" @change="toggleBlockVisibility" class="block-visibility-toggle"
-                    active-text="显示地块" inactive-text="隐藏地块">
+                <ElSwitch v-model="showBlocks" @change="toggleBlockVisibility" class="block-visibility-toggle" active-text="显示地块" inactive-text="隐藏地块">
                 </ElSwitch>
             </div>
         </div>
@@ -62,10 +64,15 @@ let lastSelectedIsochrones = []; // 用于缓存上次计算交集的等时圈�
 // 入口数据可视化相关
 const entranceMarkers = []; // 用于存储入口的标记，以便清除
 const entranceMarkersMap = {}; // 用于存储每个等时圈的入口标记
+const cities = ref([]); // 存储城市列表
+const selectedCity = ref(''); // 当前选择的城市
 
 
 
 onMounted(async () => {
+    // 获取城市列表
+    await loadCities();
+
     const initialState = { lng: 116.2, lat: 39.5, zoom: 7 };
     map.value = new Map({
         container: mapContainer.value,
@@ -84,16 +91,31 @@ onMounted(async () => {
         scaleControl: true // 比例尺
     });
 
-    // 添加地图加载完成的事件监听器
     map.value.on('load', () => {
         console.log('Map has fully loaded.');
     });
+});
+
+const loadCities = async () => {
+    try {
+        const response = await fetch('http://47.101.210.178:3001/query/cities');
+        if (!response.ok) {
+            throw new Error('Failed to fetch city data');
+        }
+        cities.value = await response.json();
+    } catch (error) {
+        console.error('Error fetching city data:', error);
+    }
+};
+
+// 城市选择变化时，重新加载等时圈数据
+const onCityChange = async () => {
+    if (!selectedCity.value) return;
 
     try {
-        // 获取站点数据
-        const response = await fetch(`${backendUrl}/query/Nanjing/station`);
+        const response = await fetch(`${backendUrl}/query/${selectedCity.value}/station`);
         if (!response.ok) {
-            throw new Error('Failed to fetch station data');
+            throw new Error('Failed to fetch station data for selected city');
         }
         const stations = await response.json();
         isochroneGeojsonFiles.value = stations.map(station => ({
@@ -101,14 +123,14 @@ onMounted(async () => {
             geojson: station
         }));
 
-        // 加载第一个站点的出入口数据作为默认显示
+        // 加载默认站点的出入口数据
         if (stations.length > 0) {
             await loadStationEntrances(stations[0]);
         }
     } catch (error) {
         console.error('Error fetching station data:', error);
     }
-});
+};
 
 
 
@@ -656,7 +678,7 @@ const unloadStationEntrances = (isochrone) => {
 .map-wrap {
     position: relative;
     width: 100%;
-    height: calc(100vh - 77px);
+    height: calc(100vh - 77px); /* 保持地图高度 */
 }
 
 .map {
@@ -677,7 +699,7 @@ const unloadStationEntrances = (isochrone) => {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     background-color: #ffffff;
     width: 100%;
-    max-width: 800px;
+    max-width: 900px; /* 增加面板的宽度以容纳更多控件 */
 }
 
 .selector-container {
@@ -687,8 +709,17 @@ const unloadStationEntrances = (isochrone) => {
     flex-wrap: nowrap;
 }
 
+/* 城市选择器样式 */
+.city-selector {
+    flex: 1; /* 自适应宽度 */
+}
+
 .geojson-selector {
     flex: 1;
+}
+
+.time-selector {
+    display: flex;
 }
 
 .block-visibility-toggle {
@@ -703,4 +734,5 @@ const unloadStationEntrances = (isochrone) => {
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
+
 </style>
