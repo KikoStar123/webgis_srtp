@@ -457,6 +457,7 @@ const updateBlockColors = async () => {
 
             const locations = await Promise.all(locationPromises);
 
+            
             // 批量更新所有地块的颜色
             blocks.forEach((block, index) => {
                 const locationData = locations[index];
