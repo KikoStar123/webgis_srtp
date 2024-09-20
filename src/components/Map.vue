@@ -10,7 +10,8 @@
                 </ElRadioGroup>
 
                 <!-- 等时圈选择框 -->
-                <ElSelect v-model="selectedIsochroneGeoJSON" class="geojson-selector" placeholder="请选择等时圈数据" filterable multiple>
+                <ElSelect v-model="selectedIsochroneGeoJSON" class="geojson-selector" placeholder="请选择等时圈数据" filterable
+                    multiple>
                     <ElOption v-for="fileObj in isochroneGeojsonFiles" :key="fileObj.key"
                         :label="fileObj.geojson.replace('.geojson', '')" :value="fileObj.key">
                     </ElOption>
@@ -38,7 +39,7 @@ import { shallowRef, onMounted, onUnmounted, ref, watch } from 'vue';
 import '@maptiler/sdk/dist/maptiler-sdk.css';
 import maplibregl from 'maplibre-gl';
 import { ElSelect, ElOption, ElSwitch, ElRadioGroup, ElRadioButton } from 'element-plus';
-import { nextTick } from 'vue'; 
+import { nextTick } from 'vue';
 //import * as turf from '@turf/turf'; // 导入 turf.js 库
 //import jsts from 'jsts'; // 导入 JSTS 库
 import * as jsts from 'jsts/dist/jsts.min.js';
@@ -457,7 +458,6 @@ const updateBlockColors = async () => {
 
             const locations = await Promise.all(locationPromises);
 
-            
             // 批量更新所有地块的颜色
             blocks.forEach((block, index) => {
                 const locationData = locations[index];
