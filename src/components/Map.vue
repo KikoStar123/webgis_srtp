@@ -46,6 +46,8 @@ import { nextTick } from 'vue';
 //import jsts from 'jsts'; // 导入 JSTS 库
 import * as jsts from 'jsts/dist/jsts.min.js';
 import 'element-plus/dist/index.css';
+import * as turf from '@turf/turf'; // Turf.js 库
+
 
 config.apiKey = 'nMI0OagfwxzpRVopD5sR';
 config.unit = 'metric'; // 比例尺公制单位
@@ -61,11 +63,11 @@ const blockNames = ref({}); // 存储每个等时圈对应的地块名称列表
 const properties = ref(['floorAreaRatio', 'buildingDensity', 'avgHeight']); // 地块属性列表
 const backendUrl = "http://47.101.210.178:3001"; // 调用全局分配的域名地址
 let lastSelectedIsochrones = []; // 用于缓存上次计算交集的等时圈集合
-// 入口数据可视化相关
 const entranceMarkers = []; // 用于存储入口的标记，以便清除
 const entranceMarkersMap = {}; // 用于存储每个等时圈的入口标记
 const cities = ref([]); // 存储城市列表
 const selectedCity = ref(''); // 当前选择的城市
+let isLoading = false; // 控制加载状态，防止重复触发
 
 
 
@@ -309,6 +311,8 @@ const loadIsochroneAndBlocks = async (isochrone, allCoordinates, allGeojsonData)
     } catch (error) {
         console.error('加载等时圈数据时出错:', error);
     }
+
+    console.log('已加载的等时圈 GeoJSON 数据:', allGeojsonData);
 };
 
 //绘制交集
@@ -327,91 +331,121 @@ const calculateFullIntersection = (allGeojsonData) => {
     const reader = new jsts.io.GeoJSONReader();
     const writer = new jsts.io.GeoJSONWriter();
 
-    // 检查是否有至少两个图层，如果没有则不计算交集
-    if (allGeojsonData.length < 2) {
-        console.log('少于两个图层，无法计算交集。');
-        return;
-    }
+    console.log('开始交集计算, 等时圈总数:', allGeojsonData.length);
 
-    // 初始化交集为空，并设置找到交集的标志
-    let intersection = null;
-    let foundIntersection = false;
-
-    // 计算交集
+    // 遍历所有等时圈，逐对计算交集
     for (let i = 0; i < allGeojsonData.length; i++) {
-        const currentPolygon = reader.read(allGeojsonData[i].geometry);
-        try {
-            if (!intersection) {
-                // 第一次设置交集为第一个多边形
-                intersection = currentPolygon;
-            } else if (intersection.intersects(currentPolygon)) {
-                // 计算与已有交集的重叠部分
-                intersection = intersection.intersection(currentPolygon);
+        const polygon1GeoJson = allGeojsonData[i].geometry;
+        const bbox1 = turf.bbox(polygon1GeoJson); // 获取第一个多边形的 Bounding Box
 
-                // 检查交集是否为空
-                if (intersection.isEmpty()) {
-                    console.warn('交集为空，停止计算。');
-                    intersection = null;
-                    break;
+        for (let j = i + 1; j < allGeojsonData.length; j++) {
+            const polygon2GeoJson = allGeojsonData[j].geometry;
+            const bbox2 = turf.bbox(polygon2GeoJson); // 获取第二个多边形的 Bounding Box
+
+            // 首先通过 Bounding Box 判断是否可能相交
+            if (bboxOverlap(bbox1, bbox2)) {
+                console.log(`多边形 ${i} 和 ${j} 的 Bounding Box 重叠，进行进一步相交判断`);
+
+                const polygon1 = reader.read(polygon1GeoJson);
+                const polygon2 = reader.read(polygon2GeoJson);
+
+                // 检查两个多边形是否有交集
+                if (polygon1.intersects(polygon2)) {
+                    console.log(`多边形 ${i} 和 ${j} 存在交集`);
+
+                    // 计算交集
+                    const intersection = polygon1.intersection(polygon2);
+
+                    // 如果交集有效（非空），则绘制
+                    if (!intersection.isEmpty()) {
+                        const intersectionGeoJson = writer.write(intersection);
+                        const intersectionLayerId = `intersection-layer-${i}-${j}`;
+
+                        // 如果该 source 和 layer 不存在，才进行添加
+                        if (!map.value.getSource(intersectionLayerId)) {
+                            console.log(`添加交集图层: ${intersectionLayerId}`);
+
+                            // 添加新的 source
+                            map.value.addSource(intersectionLayerId, {
+                                type: 'geojson',
+                                data: intersectionGeoJson
+                            });
+
+                            // 添加填充图层
+                            map.value.addLayer({
+                                id: intersectionLayerId,
+                                type: 'fill',
+                                source: intersectionLayerId,
+                                paint: {
+                                    'fill-color': '#FF0000', // 统一使用红色
+                                    'fill-opacity': 0.6
+                                }
+                            });
+
+                            // 添加边框线图层
+                            map.value.addLayer({
+                                id: `${intersectionLayerId}-line`,
+                                type: 'line',
+                                source: intersectionLayerId,
+                                paint: {
+                                    'line-color': '#000000', // 线条为黑色
+                                    'line-width': 2
+                                }
+                            });
+                        } else {
+                            console.log(`交集图层已存在: ${intersectionLayerId}`);
+                        }
+                    } else {
+                        console.warn(`多边形 ${i} 和 ${j} 之间没有有效的交集`);
+                    }
+                } else {
+                    console.warn(`多边形 ${i} 和 ${j} 不相交，跳过该配对。`);
                 }
-
-                // 设置找到交集的标志
-                foundIntersection = true;
             } else {
-                console.warn('当前多边形与已有交集不重叠，跳过该多边形。');
+                console.warn(`多边形 ${i} 和 ${j} 的 Bounding Box 不重叠，跳过。`);
             }
-        } catch (error) {
-            console.error(`交集计算失败:`, error);
-            return;
         }
     }
-
-    // 检查最终交集是否为空，或者未找到有效交集
-    if (!intersection || !foundIntersection) {
-        console.log('没有有效的交集，不进行渲染。');
-        return;
-    }
-
-    // 将交集结果转换为 GeoJSON
-    const intersectionGeoJson = writer.write(intersection);
-
-    // 绘制新的交集图层
-    map.value.addSource('intersection-layer', {
-        type: 'geojson',
-        data: intersectionGeoJson
-    });
-
-    map.value.addLayer({
-        id: 'intersection-layer',
-        type: 'fill',
-        source: 'intersection-layer',
-        paint: {
-            'fill-color': '#ff0000',
-            'fill-opacity': 0.6
-        }
-    });
-
-    map.value.addLayer({
-        id: 'intersection-layer-line',
-        type: 'line',
-        source: 'intersection-layer',
-        paint: {
-            'line-color': '#000000',
-            'line-width': 2
-        }
-    });
 };
+
+// 函数：判断两个 Bounding Box 是否有重叠
+const bboxOverlap = (bbox1, bbox2) => {
+    return !(
+        bbox1[2] < bbox2[0] ||  // bbox1 的右边界小于 bbox2 的左边界
+        bbox1[0] > bbox2[2] ||  // bbox1 的左边界大于 bbox2 的右边界
+        bbox1[3] < bbox2[1] ||  // bbox1 的上边界小于 bbox2 的下边界
+        bbox1[1] > bbox2[3]     // bbox1 的下边界大于 bbox2 的上边界
+    );
+};
+
 
 
 // 清除交集图层
 const clearIntersectionLayer = () => {
-    const intersectionLayerId = 'intersection-layer';
-    if (map.value.getSource(intersectionLayerId)) {
-        map.value.removeLayer(intersectionLayerId);
-        map.value.removeLayer(`${intersectionLayerId}-line`);
-        map.value.removeSource(intersectionLayerId);
+    if (!map.value || !map.value.isStyleLoaded()) {
+        console.warn('地图尚未完全加载，无法清除交集图层');
+        return; // 地图尚未加载，返回
+    }
+
+    const layers = map.value.getStyle().layers;
+    if (layers) {
+        layers.forEach((layer) => {
+            if (layer.id.includes('intersection-layer')) {
+                map.value.removeLayer(layer.id);
+            }
+        });
+    }
+
+    const sources = map.value.getStyle().sources;
+    if (sources) {
+        Object.keys(sources).forEach((sourceId) => {
+            if (sourceId.includes('intersection-layer')) {
+                map.value.removeSource(sourceId);
+            }
+        });
     }
 };
+
 
 
 
@@ -442,9 +476,29 @@ const hideAndRemoveCurrentBlocks = (isochrone) => {
         map.value.removeSource(layerId);
     }
 
+    // 移除与该等时圈相关的交集图层
+    const layers = map.value.getStyle().layers;
+    if (layers) {
+        layers.forEach((layer) => {
+            if (layer.id.includes(`intersection-layer-${isochrone}`)) {
+                map.value.removeLayer(layer.id);
+            }
+        });
+    }
+
+    const sources = map.value.getStyle().sources;
+    if (sources) {
+        Object.keys(sources).forEach((sourceId) => {
+            if (sourceId.includes(`intersection-layer-${isochrone}`)) {
+                map.value.removeSource(sourceId);
+            }
+        });
+    }
+
     // 移除对应的地块名称
     delete blockNames.value[isochrone];
 };
+
 
 // 更新地块颜色
 const updateBlockColors = async () => {

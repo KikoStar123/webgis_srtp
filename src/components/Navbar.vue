@@ -1,6 +1,6 @@
 <template>
     <div class="heading">
-        <h1>时空知识图谱前端展示</h1>
+        <h1>时空知识图谱前端展示V2.0</h1>
     </div>
 </template>
 
@@ -17,17 +17,20 @@
     color: white;
     text-align: center;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    border-radius: 10px;
+    border-radius: 15px;
     max-width: 95%;
     margin: 20px auto;
 }
 
-.heading > h1 {
+.heading>h1 {
     font-family: 'Poppins', sans-serif;
-    font-size: 2.5rem;
-    padding: 20px;
+    font-size: 2rem;
+    /* Reduced the font size */
+    padding: 10px;
+    /* Reduced padding */
     margin: 0;
-    letter-spacing: 2px;
+    letter-spacing: 1.5px;
+    /* Slightly reduced letter spacing */
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 </style>
