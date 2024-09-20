@@ -22,5 +22,3 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no root@110.42.33.228 "
           cd /data/frontend/webgis_srtp && git pull origin main && ./deploy_script.sh"
-
-
