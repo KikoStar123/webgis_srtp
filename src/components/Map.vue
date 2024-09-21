@@ -33,9 +33,11 @@
                 <!-- 地块属性选择框 -->
                 <ElSelect v-model="selectedProperty" class="geojson-selector" placeholder="请选择地块属性" filterable
                     @change="updateBlockColors">
-                    <ElOption v-for="property in properties" :key="property" :label="property" :value="property">
+                    <ElOption v-for="property in properties" :key="property.value" :label="property.label"
+                        :value="property.value">
                     </ElOption>
                 </ElSelect>
+
 
                 <!-- 地块显示/隐藏开关 -->
                 <ElSwitch v-model="showBlocks" @change="toggleBlockVisibility" class="block-visibility-toggle"
@@ -73,7 +75,12 @@ const selectedTime = ref(''); // 选择的时间（5分钟或10分钟）
 const selectedProperty = ref('floorAreaRatio'); // 选择的属性，默认选择第一个属性
 const showBlocks = ref(false); // 控制地块显示开关
 const blockNames = ref({}); // 存储每个等时圈对应的地块名称列表
-const properties = ref(['floorAreaRatio', 'buildingDensity', 'avgHeight']); // 地块属性列表
+const properties = ref([
+    { label: '容积率', value: 'floorAreaRatio' },
+    { label: '建筑密度', value: 'buildingDensity' },
+    { label: '平均高度', value: 'avgHeight' }
+]); // 地块属性列表
+ // 地块属性列表
 const backendUrl = "http://47.101.210.178:3001"; // 调用全局分配的域名地址
 let lastSelectedIsochrones = []; // 用于缓存上次计算交集的等时圈集合
 const entranceMarkers = []; // 用于存储入口的标记，以便清除
@@ -82,6 +89,7 @@ const cities = ref([]); // 存储城市列表
 const selectedCity = ref(''); // 当前选择的城市
 let isLoading = false; // 控制加载状态，防止重复触发
 const isPanelCollapsed = ref(false);
+
 
 
 
