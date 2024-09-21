@@ -765,11 +765,11 @@ const unloadStationEntrances = (isochrone) => {
     top: 10px;
     right: 50px;
     z-index: 1000;
-    padding: 15px;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
     background-color: #ffffff;
-    width: 300px;
+    width: 320px;
     transition: max-height 0.3s ease, opacity 0.3s ease;
     max-height: 600px;
     opacity: 1;
@@ -789,23 +789,47 @@ const unloadStationEntrances = (isochrone) => {
 }
 
 .el-button {
-    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
     border-radius: 8px;
     padding: 10px 20px;
     font-size: 16px;
     background-color: #409eff;
     color: #fff;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border: 2px solid transparent;
+    cursor: pointer;
 }
 
 .el-button:hover {
     background-color: #66b1ff;
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    border-color: #66b1ff;
+    transform: translateY(-2px);
 }
 
 .el-button:active {
     background-color: #3a8ee6;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transform: translateY(0);
+}
+
+.el-button:focus {
+    outline: none;
+    border-color: #66b1ff;
+}
+
+.el-button.is-disabled {
+    background-color: #d3d3d3;
+    color: #ffffff;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.el-button.is-disabled:hover,
+.el-button.is-disabled:active {
+    background-color: #d3d3d3;
+    box-shadow: none;
+    transform: none;
 }
 
 .selector-container {
@@ -826,10 +850,11 @@ const unloadStationEntrances = (isochrone) => {
 .time-selector {
     display: flex;
     justify-content: space-between;
+    width: 100%;
 }
 
 .el-radio-button {
-    width: 100px;
+    flex: 1;
     justify-content: center;
     background-color: #f5f7fa;
     color: #409eff;
