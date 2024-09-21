@@ -1,20 +1,12 @@
 <template>
     <div class="map-wrap">
         <div class="map" ref="mapContainer"></div>
-        <div :class="['control-panel', { collapsed: isPanelCollapsed }]">
-            <!-- 展开/折叠按钮 -->
-            <div class="toggle-panel-btn">
-                <el-button type="primary" @click="togglePanelVisibility">
-                    {{ isPanelCollapsed ? '展开菜单' : '折叠菜单' }}
-                </el-button>
-            </div>
-
-            <!-- 菜单内容 -->
-            <div class="selector-container" v-show="!isPanelCollapsed">
+        <div class="control-panel">
+            <div class="selector-container">
                 <!-- 城市选择框 -->
-                <ElSelect v-model="selectedCity" class="city-selector" placeholder="请选择城市" filterable
-                    @change="onCityChange">
-                    <ElOption v-for="city in cities" :key="city" :label="city" :value="city"></ElOption>
+                <ElSelect v-model="selectedCity" class="city-selector" placeholder="请选择城市" filterable @change="onCityChange">
+                    <ElOption v-for="city in cities" :key="city" :label="city" :value="city">
+                    </ElOption>
                 </ElSelect>
 
                 <!-- 时间选择按钮组 -->
@@ -23,30 +15,25 @@
                     <ElRadioButton label="10分钟">10分钟</ElRadioButton>
                 </ElRadioGroup>
 
-                <!-- 等时圈选择列表 -->
-                <ElSelect v-model="selectedIsochroneGeoJSON" class="isochrone-selector" placeholder="请选择等时圈数据"
-                    filterable multiple>
-                    <ElOption v-for="fileObj in isochroneGeojsonFiles" :key="fileObj.key"
-                        :label="fileObj.geojson.replace('.geojson', '')" :value="fileObj.key"></ElOption>
+                <!-- 等时圈选择框 -->
+                <ElSelect v-model="selectedIsochroneGeoJSON" class="geojson-selector" placeholder="请选择等时圈数据" filterable multiple>
+                    <ElOption v-for="fileObj in isochroneGeojsonFiles" :key="fileObj.key" :label="fileObj.geojson.replace('.geojson', '')" :value="fileObj.key">
+                    </ElOption>
                 </ElSelect>
 
                 <!-- 地块属性选择框 -->
-                <ElSelect v-model="selectedProperty" class="geojson-selector" placeholder="请选择地块属性" filterable
-                    @change="updateBlockColors">
+                <ElSelect v-model="selectedProperty" class="geojson-selector" placeholder="请选择地块属性" filterable @change="updateBlockColors">
                     <ElOption v-for="property in properties" :key="property" :label="property" :value="property">
                     </ElOption>
                 </ElSelect>
 
                 <!-- 地块显示/隐藏开关 -->
-                <ElSwitch v-model="showBlocks" @change="toggleBlockVisibility" class="block-visibility-toggle"
-                    active-text="显示地块" inactive-text="隐藏地块"></ElSwitch>
+                <ElSwitch v-model="showBlocks" @change="toggleBlockVisibility" class="block-visibility-toggle" active-text="显示地块" inactive-text="隐藏地块">
+                </ElSwitch>
             </div>
         </div>
     </div>
 </template>
-
-
-
 
 <script setup>
 import { Map, MapStyle, config } from '@maptiler/sdk';
@@ -81,7 +68,6 @@ const entranceMarkersMap = {}; // 用于存储每个等时圈的入口标记
 const cities = ref([]); // 存储城市列表
 const selectedCity = ref(''); // 当前选择的城市
 let isLoading = false; // 控制加载状态，防止重复触发
-const isPanelCollapsed = ref(false);
 
 
 
@@ -148,9 +134,7 @@ const onCityChange = async () => {
     }
 };
 
-const togglePanelVisibility = () => {
-    isPanelCollapsed.value = !isPanelCollapsed.value;
-};
+
 
 // 监听等时圈和时间选择的变化
 watch([selectedIsochroneGeoJSON, selectedTime], async ([newIsochrones, newTime], [oldIsochrones, oldTime]) => {
@@ -341,88 +325,86 @@ const drawIntersection = (allGeojsonData) => {
 };
 
 
-
-// 重新计算所有交集的函数
+// 计算交集的函数
 const calculateFullIntersection = (allGeojsonData) => {
     const reader = new jsts.io.GeoJSONReader();
     const writer = new jsts.io.GeoJSONWriter();
 
-    console.log('开始交集计算, 等时圈总数:', allGeojsonData.length);
+    const lastPolygonGeoJson = allGeojsonData[allGeojsonData.length - 1].geometry;
+    const lastBbox = turf.bbox(lastPolygonGeoJson); // 获取最新多边形的 Bounding Box
 
-    // 遍历所有等时圈，逐对计算交集
-    for (let i = 0; i < allGeojsonData.length; i++) {
-        const polygon1GeoJson = allGeojsonData[i].geometry;
-        const bbox1 = turf.bbox(polygon1GeoJson); // 获取第一个多边形的 Bounding Box
+    console.log('开始与最新等时圈进行交集计算:', allGeojsonData.length - 1);
 
-        for (let j = i + 1; j < allGeojsonData.length; j++) {
-            const polygon2GeoJson = allGeojsonData[j].geometry;
-            const bbox2 = turf.bbox(polygon2GeoJson); // 获取第二个多边形的 Bounding Box
+    // 仅与最后一个等时圈计算交集
+    for (let i = 0; i < allGeojsonData.length - 1; i++) {
+        const polygonGeoJson = allGeojsonData[i].geometry;
+        const bbox = turf.bbox(polygonGeoJson); // 获取第 i 个多边形的 Bounding Box
 
-            // 首先通过 Bounding Box 判断是否可能相交
-            if (bboxOverlap(bbox1, bbox2)) {
-                console.log(`多边形 ${i} 和 ${j} 的 Bounding Box 重叠，进行进一步相交判断`);
+        // 首先通过 Bounding Box 判断是否可能相交
+        if (bboxOverlap(lastBbox, bbox)) {
+            console.log(`多边形 ${i} 和最后一个多边形的 Bounding Box 重叠，进行进一步相交判断`);
 
-                const polygon1 = reader.read(polygon1GeoJson);
-                const polygon2 = reader.read(polygon2GeoJson);
+            const lastPolygon = reader.read(lastPolygonGeoJson);
+            const polygon = reader.read(polygonGeoJson);
 
-                // 检查两个多边形是否有交集
-                if (polygon1.intersects(polygon2)) {
-                    console.log(`多边形 ${i} 和 ${j} 存在交集`);
+            // 检查两个多边形是否有交集
+            if (lastPolygon.intersects(polygon)) {
+                console.log(`多边形 ${i} 和最后一个多边形存在交集`);
 
-                    // 计算交集
-                    const intersection = polygon1.intersection(polygon2);
+                // 计算交集
+                const intersection = lastPolygon.intersection(polygon);
 
-                    // 如果交集有效（非空），则绘制
-                    if (!intersection.isEmpty()) {
-                        const intersectionGeoJson = writer.write(intersection);
-                        const intersectionLayerId = `intersection-layer-${i}-${j}`;
+                // 如果交集有效（非空），则绘制
+                if (!intersection.isEmpty()) {
+                    const intersectionGeoJson = writer.write(intersection);
+                    const intersectionLayerId = `intersection-layer-${i}-last`;
 
-                        // 如果该 source 和 layer 不存在，才进行添加
-                        if (!map.value.getSource(intersectionLayerId)) {
-                            console.log(`添加交集图层: ${intersectionLayerId}`);
+                    // 如果该 source 和 layer 不存在，才进行添加
+                    if (!map.value.getSource(intersectionLayerId)) {
+                        console.log(`添加交集图层: ${intersectionLayerId}`);
 
-                            // 添加新的 source
-                            map.value.addSource(intersectionLayerId, {
-                                type: 'geojson',
-                                data: intersectionGeoJson
-                            });
+                        // 添加新的 source
+                        map.value.addSource(intersectionLayerId, {
+                            type: 'geojson',
+                            data: intersectionGeoJson
+                        });
 
-                            // 添加填充图层
-                            map.value.addLayer({
-                                id: intersectionLayerId,
-                                type: 'fill',
-                                source: intersectionLayerId,
-                                paint: {
-                                    'fill-color': '#FF0000', // 统一使用红色
-                                    'fill-opacity': 0.6
-                                }
-                            });
+                        // 添加填充图层
+                        map.value.addLayer({
+                            id: intersectionLayerId,
+                            type: 'fill',
+                            source: intersectionLayerId,
+                            paint: {
+                                'fill-color': '#FF0000', // 统一使用红色
+                                'fill-opacity': 0.6
+                            }
+                        });
 
-                            // 添加边框线图层
-                            map.value.addLayer({
-                                id: `${intersectionLayerId}-line`,
-                                type: 'line',
-                                source: intersectionLayerId,
-                                paint: {
-                                    'line-color': '#000000', // 线条为黑色
-                                    'line-width': 2
-                                }
-                            });
-                        } else {
-                            console.log(`交集图层已存在: ${intersectionLayerId}`);
-                        }
+                        // 添加边框线图层
+                        map.value.addLayer({
+                            id: `${intersectionLayerId}-line`,
+                            type: 'line',
+                            source: intersectionLayerId,
+                            paint: {
+                                'line-color': '#000000', // 线条为黑色
+                                'line-width': 2
+                            }
+                        });
                     } else {
-                        console.warn(`多边形 ${i} 和 ${j} 之间没有有效的交集`);
+                        console.log(`交集图层已存在: ${intersectionLayerId}`);
                     }
                 } else {
-                    console.warn(`多边形 ${i} 和 ${j} 不相交，跳过该配对。`);
+                    console.warn(`多边形 ${i} 和最后一个多边形之间没有有效的交集`);
                 }
             } else {
-                console.warn(`多边形 ${i} 和 ${j} 的 Bounding Box 不重叠，跳过。`);
+                console.warn(`多边形 ${i} 和最后一个多边形不相交，跳过该配对。`);
             }
+        } else {
+            console.warn(`多边形 ${i} 和最后一个多边形的 Bounding Box 不重叠，跳过。`);
         }
     }
 };
+
 
 // 函数：判断两个 Bounding Box 是否有重叠
 const bboxOverlap = (bbox1, bbox2) => {
@@ -493,10 +475,19 @@ const hideAndRemoveCurrentBlocks = (isochrone) => {
     }
 
     // 移除与该等时圈相关的交集图层
+    removeIntersectionLayers(isochrone);
+
+    // 移除对应的地块名称
+    delete blockNames.value[isochrone];
+};
+
+
+// 函数：移除与指定等时圈相关的交集图层
+const removeIntersectionLayers = (isochrone) => {
     const layers = map.value.getStyle().layers;
     if (layers) {
         layers.forEach((layer) => {
-            if (layer.id.includes(`intersection-layer-${isochrone}`)) {
+            if (layer.id.includes(`intersection-layer`) && layer.id.includes(isochrone)) {
                 map.value.removeLayer(layer.id);
             }
         });
@@ -505,15 +496,13 @@ const hideAndRemoveCurrentBlocks = (isochrone) => {
     const sources = map.value.getStyle().sources;
     if (sources) {
         Object.keys(sources).forEach((sourceId) => {
-            if (sourceId.includes(`intersection-layer-${isochrone}`)) {
+            if (sourceId.includes(`intersection-layer`) && sourceId.includes(isochrone)) {
                 map.value.removeSource(sourceId);
             }
         });
     }
-
-    // 移除对应的地块名称
-    delete blockNames.value[isochrone];
 };
+
 
 
 // 更新地块颜色
@@ -748,8 +737,7 @@ const unloadStationEntrances = (isochrone) => {
 .map-wrap {
     position: relative;
     width: 100%;
-    height: calc(100vh - 77px);
-    /* 保持地图高度 */
+    height: calc(100vh - 77px); /* 保持地图高度 */
 }
 
 .map {
@@ -763,60 +751,26 @@ const unloadStationEntrances = (isochrone) => {
 .control-panel {
     position: absolute;
     top: 10px;
-    right: 50px;
+    left: 10px;
     z-index: 1000;
     padding: 15px;
     border-radius: 10px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     background-color: #ffffff;
-    width: 300px;
-    transition: max-height 0.3s ease, opacity 0.3s ease;
-    max-height: 600px;
-    opacity: 1;
-    overflow: hidden;
-}
-
-.control-panel.collapsed {
-    max-height: 50px;
-    opacity: 0.9;
-    overflow: hidden;
-}
-
-.toggle-panel-btn {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 10px;
-}
-
-.el-button {
-    transition: background-color 0.3s ease, box-shadow 0.3s ease;
-    border-radius: 8px;
-    padding: 10px 20px;
-    font-size: 16px;
-    background-color: #409eff;
-    color: #fff;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.el-button:hover {
-    background-color: #66b1ff;
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
-}
-
-.el-button:active {
-    background-color: #3a8ee6;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 900px; /* 增加面板的宽度以容纳更多控件 */
 }
 
 .selector-container {
     display: flex;
-    flex-direction: column;
     gap: 15px;
+    align-items: center;
+    flex-wrap: nowrap;
 }
 
 /* 城市选择器样式 */
 .city-selector {
-    flex: 1;
+    flex: 1; /* 自适应宽度 */
 }
 
 .geojson-selector {
@@ -825,40 +779,6 @@ const unloadStationEntrances = (isochrone) => {
 
 .time-selector {
     display: flex;
-    justify-content: space-between;
-}
-
-.el-radio-button {
-    width: 100px;
-    justify-content: center;
-    background-color: #f5f7fa;
-    color: #409eff;
-    transition: background-color 0.3s, color 0.3s;
-}
-
-.el-radio-button:hover {
-    background-color: #e0eafc;
-}
-
-.el-radio-button.is-active {
-    background-color: #409eff;
-    color: #fff;
-}
-
-.el-radio-button.is-active:hover {
-    background-color: #66b1ff;
-}
-
-/* 等时圈选择框样式 */
-.isochrone-selector {
-    max-height: 280px;
-    overflow-y: auto;
-    border: 1px solid #dcdfe6;
-    padding: 10px;
-    border-radius: 8px;
-    background-color: #ffffff;
-    width: 100%;
-    box-sizing: border-box;
 }
 
 .block-visibility-toggle {
@@ -873,4 +793,5 @@ const unloadStationEntrances = (isochrone) => {
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
+
 </style>
