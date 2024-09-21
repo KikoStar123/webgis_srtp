@@ -766,14 +766,15 @@ const unloadStationEntrances = (isochrone) => {
     right: 50px;
     z-index: 1000;
     padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    border-radius: 16px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
     background-color: #ffffff;
     width: 320px;
-    transition: max-height 0.3s ease, opacity 0.3s ease;
+    transition: all 0.3s ease;
     max-height: 600px;
     opacity: 1;
     overflow: hidden;
+    border: 1px solid #e6e6e6;
 }
 
 .control-panel.collapsed {
@@ -789,33 +790,43 @@ const unloadStationEntrances = (isochrone) => {
 }
 
 .el-button {
-    transition: background-color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
-    border-radius: 8px;
-    padding: 10px 20px;
+    transition: all 0.3s ease;
+    border-radius: 10px;
+    padding: 12px 24px;
+    /* 统一内边距 */
     font-size: 16px;
     background-color: #409eff;
     color: #fff;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     border: 2px solid transparent;
+    /* 去掉内外框的视觉差异 */
     cursor: pointer;
 }
 
 .el-button:hover {
     background-color: #66b1ff;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-    border-color: #66b1ff;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    /* 提高阴影效果，增加立体感 */
     transform: translateY(-2px);
+    /* 增加微小的上移效果 */
+    border: 2px solid #66b1ff;
+    /* 统一外框颜色为 hover 状态 */
 }
 
 .el-button:active {
     background-color: #3a8ee6;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    /* 减少阴影，按压效果 */
     transform: translateY(0);
+    /* 移除上移效果 */
+    border: 2px solid #3a8ee6;
+    /* 统一 active 状态下的外框颜色 */
 }
 
 .el-button:focus {
     outline: none;
-    border-color: #66b1ff;
+    border: 2px solid #66b1ff;
+    /* 焦点状态下的外框颜色 */
 }
 
 .el-button.is-disabled {
@@ -823,6 +834,9 @@ const unloadStationEntrances = (isochrone) => {
     color: #ffffff;
     cursor: not-allowed;
     box-shadow: none;
+    /* 禁用时无阴影效果 */
+    border: 2px solid #d3d3d3;
+    /* 统一禁用状态的外框 */
 }
 
 .el-button.is-disabled:hover,
@@ -830,12 +844,14 @@ const unloadStationEntrances = (isochrone) => {
     background-color: #d3d3d3;
     box-shadow: none;
     transform: none;
+    border: 2px solid #d3d3d3;
+    /* 保持禁用状态下的一致外框 */
 }
 
 .selector-container {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 20px;
 }
 
 /* 城市选择器样式 */
@@ -859,10 +875,12 @@ const unloadStationEntrances = (isochrone) => {
     background-color: #f5f7fa;
     color: #409eff;
     transition: background-color 0.3s, color 0.3s;
+    border-radius: 8px;
+    border: 1px solid #dcdfe6;
 }
 
 .el-radio-button:hover {
-    background-color: #e0eafc;
+    background-color: #e6f0ff;
 }
 
 .el-radio-button.is-active {
@@ -878,24 +896,31 @@ const unloadStationEntrances = (isochrone) => {
 .isochrone-selector {
     max-height: 280px;
     overflow-y: auto;
-    border: 1px solid #dcdfe6;
-    padding: 10px;
-    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    padding: 12px;
+    border-radius: 12px;
     background-color: #ffffff;
     width: 100%;
     box-sizing: border-box;
 }
 
 .block-visibility-toggle {
-    margin-top: 15px;
+    margin-top: 20px;
 }
 
 .el-select .el-input {
-    border-radius: 8px;
+    border-radius: 10px;
 }
 
 .el-select-dropdown {
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 增加全局字体样式优化 */
+body {
+    font-family: 'Roboto', sans-serif;
+    color: #333;
+    line-height: 1.6;
 }
 </style>
