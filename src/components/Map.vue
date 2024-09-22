@@ -80,8 +80,7 @@ const properties = ref([
     { label: '建筑密度', value: 'buildingDensity' },
     { label: '平均高度', value: 'avgHeight' }
 ]); // 地块属性列表
- // 地块属性列表
-const backendUrl = "http://47.101.210.178:3001"; // 调用全局分配的域名地址
+const backendUrl = "http://110.42.33.228:3001"; // 调用全局分配的域名地址
 let lastSelectedIsochrones = []; // 用于缓存上次计算交集的等时圈集合
 const entranceMarkers = []; // 用于存储入口的标记，以便清除
 const entranceMarkersMap = {}; // 用于存储每个等时圈的入口标记
@@ -122,7 +121,7 @@ onMounted(async () => {
 
 const loadCities = async () => {
     try {
-        const response = await fetch('http://47.101.210.178:3001/query/cities');
+        const response = await fetch(`${backendUrl}/query/cities`);
         if (!response.ok) {
             throw new Error('Failed to fetch city data');
         }
@@ -246,7 +245,7 @@ const loadIsochroneAndBlocks = async (isochrone, allCoordinates, allGeojsonData)
 
         // 根据选择的时间确定 API 路径
         const timeValue = selectedTime.value === '5分钟' ? '_5' : '_10';
-        const isochroneUrl = `${backendUrl}/query/Nanjing/${encodeURIComponent(isochrone)}/${encodeURIComponent(isochrone)}${timeValue}/`;
+        const isochroneUrl = `${backendUrl}/query/${selectedCity.value}/${encodeURIComponent(isochrone)}/${encodeURIComponent(isochrone)}${timeValue}/`;
 
         const response = await fetch(isochroneUrl);
         if (!response.ok) {
@@ -319,7 +318,7 @@ const loadIsochroneAndBlocks = async (isochrone, allCoordinates, allGeojsonData)
         }
 
         // 获取地块名称
-        const blockUrl = `${backendUrl}/query/Nanjing/${encodeURIComponent(isochrone)}/${encodeURIComponent(isochrone)}${timeValue}/block/`;
+        const blockUrl = `${backendUrl}/query/${selectedCity.value}/${encodeURIComponent(isochrone)}/${encodeURIComponent(isochrone)}${timeValue}/block/`;
         const blockResponse = await fetch(blockUrl);
         if (!blockResponse.ok) {
             throw new Error('Failed to fetch block data');
@@ -545,11 +544,11 @@ const updateBlockColors = async () => {
 
             // 统一获取所有地块的坐标和属性
             const locationPromises = blocks.map(block => {
-                const locationUrl = `${backendUrl}/query/Nanjing/${encodeURIComponent(isochrone)}/${encodeURIComponent(isochrone)}${timeValue}/${encodeURIComponent(block)}/location`;
+                const locationUrl = `${backendUrl}/query/${selectedCity.value}/${encodeURIComponent(isochrone)}/${encodeURIComponent(isochrone)}${timeValue}/${encodeURIComponent(block)}/location`;
                 return fetch(locationUrl).then(res => res.json());
             });
 
-            const propertyUrl = `${backendUrl}/query/Nanjing/${encodeURIComponent(isochrone)}/${encodeURIComponent(isochrone)}${timeValue}/block/${encodeURIComponent(selectedProperty.value)}`;
+            const propertyUrl = `${backendUrl}/query/${selectedCity.value}/${encodeURIComponent(isochrone)}/${encodeURIComponent(isochrone)}${timeValue}/block/${encodeURIComponent(selectedProperty.value)}`;
             const propertyResponse = await fetch(propertyUrl);
             if (!propertyResponse.ok) {
                 throw new Error(`Failed to fetch ${selectedProperty.value} for blocks`);
@@ -675,7 +674,7 @@ const getColorInterpolation = (criteria) => {
 // 加载站点出入口
 const loadStationEntrances = async (isochrone) => {
     try {
-        const city = 'Nanjing'; // 替换为实际城市名称
+        const city = selectedCity.value ; // 替换为实际城市名称
         const entranceUrl = `${backendUrl}/query/${city}/${encodeURIComponent(isochrone)}/entrance_locations`;
 
         const response = await fetch(entranceUrl);
@@ -693,23 +692,30 @@ const loadStationEntrances = async (isochrone) => {
 
 // 可视化出入口
 const visualizeEntrances = (isochrone, entrances) => {
-    // 清除之前该等时圈的入口标记
-    if (entranceMarkersMap[isochrone]) {
-        entranceMarkersMap[isochrone].forEach(marker => marker.remove());
+    // 检查 entrances 是否有效且有数据
+    if (!entrances || !entrances[0]) {
+        console.error('入口数据无效或为空:', entrances);
+        return;
     }
 
-    // 处理坐标数据
     let coordinates;
     try {
+        // 使用正则表达式将字符串格式的元组转换为 JSON 格式的数组
         const formattedData = entrances[0]
-            .replace(/\(/g, '[')
-            .replace(/\)/g, ']')
-            .replace(/\'/g, '"');
+            .replace(/\(/g, '[')  // 将 ( 替换为 [
+            .replace(/\)/g, ']')  // 将 ) 替换为 ]
+            .replace(/\'/g, '"'); // 将 ' 替换为 "
 
-        coordinates = JSON.parse(formattedData); // 解析为 JSON 数组
+        // 将格式化后的字符串解析为 JSON 数组
+        coordinates = JSON.parse(formattedData);
     } catch (parseError) {
         console.error('坐标数据解析错误:', parseError);
         return;
+    }
+
+    // 清除之前该等时圈的入口标记
+    if (entranceMarkersMap[isochrone]) {
+        entranceMarkersMap[isochrone].forEach(marker => marker.remove());
     }
 
     // 创建新的入口标记数组
@@ -738,6 +744,7 @@ const visualizeEntrances = (isochrone, entrances) => {
     // 将该等时圈的入口标记存储到对象中
     entranceMarkersMap[isochrone] = markers;
 };
+
 
 
 // 卸载等时圈对应的入口
