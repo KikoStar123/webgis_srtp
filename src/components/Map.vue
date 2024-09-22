@@ -99,7 +99,7 @@ onMounted(async () => {
     const initialState = { lng: 116.2, lat: 39.5, zoom: 7 };
     map.value = new Map({
         container: mapContainer.value,
-        style: MapStyle.STREETS,
+        style: MapStyle.OPENSTREETMAP,
         center: [initialState.lng, initialState.lat],
         zoom: initialState.zoom,
         minimap: {
