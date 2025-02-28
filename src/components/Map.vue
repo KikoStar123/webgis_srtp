@@ -76,10 +76,12 @@ const selectedProperty = ref('floorAreaRatio'); // 选择的属性，默认选�
 const showBlocks = ref(false); // 控制地块显示开关
 const blockNames = ref({}); // 存储每个等时圈对应的地块名称列表
 const properties = ref([
-    { label: '容积率', value: 'floorAreaRatio' },
+    { label: '容积率', value: 'rjl' }, // 修改 floorAreaRatio 为 rjl
     { label: '建筑密度', value: 'buildingDensity' },
-    { label: '平均高度', value: 'avgHeight' }
-]); // 地块属性列表
+    { label: '平均高度', value: 'avgHeight' },
+    { label: '功能混合度', value: 'gnhhd' }, // 新增功能混合度
+    { label: 'POI密度', value: 'poimd' } // 新增 POI 密度
+]); // 地块属性列表 // 地块属性列表
 const backendUrl = "http://110.42.33.228:3001"; // 调用全局分配的域名地址
 let lastSelectedIsochrones = []; // 用于缓存上次计算交集的等时圈集合
 const entranceMarkers = []; // 用于存储入口的标记，以便清除
@@ -553,7 +555,13 @@ const updateBlockColors = async () => {
             if (!propertyResponse.ok) {
                 throw new Error(`Failed to fetch ${selectedProperty.value} for blocks`);
             }
+
+           
+
             const propertyValues = await propertyResponse.json();
+
+            // 打印获取到的功能混合度和 POI 密度数据
+            //console.log(`属性 ${selectedProperty.value} 的值:`, propertyValues);
 
             const locations = await Promise.all(locationPromises);
 
@@ -627,19 +635,19 @@ const toggleBlockVisibility = () => {
 
 const getColorInterpolation = (criteria) => {
     switch (criteria) {
-        case 'floorAreaRatio':
+        case 'rjl': // 容积率 (新)
             return [
                 'interpolate',
                 ['linear'],
-                ['get', 'floorAreaRatio'],
+                ['get', 'rjl'],
                 0, 'rgb(250,209,209)',
                 1, 'rgb(246,162,163)',
                 5, 'rgb(241,116,116)',
                 10, 'rgb(238,69,68)',
                 15, 'rgb(233,32,24)',
-                1000, 'rgb(255,255,255)' // 用于定义最大值以上的颜色
+                1000, 'rgb(255,255,255)'
             ];
-        case 'buildingDensity':
+        case 'buildingDensity': // 建筑密度
             return [
                 'interpolate',
                 ['linear'],
@@ -650,9 +658,9 @@ const getColorInterpolation = (criteria) => {
                 0.6, 'rgb(215,152,62)',
                 0.8, 'rgb(205,127,16)',
                 1, 'rgb(205,127,16)',
-                10, 'rgb(255,255,255)' // 用于定义最大值以上的颜色
+                10, 'rgb(255,255,255)'
             ];
-        case 'avgHeight':
+        case 'avgHeight': // 平均高度
             return [
                 'interpolate',
                 ['linear'],
@@ -664,10 +672,48 @@ const getColorInterpolation = (criteria) => {
                 100, 'rgb(241,235,90)',
                 150, 'rgb(238,230,50)',
                 200, 'rgb(235,224,10)',
-                1000, 'rgb(255,255,255)' // 用于定义最大值以上的颜色
+                1000, 'rgb(255,255,255)'
+            ];
+        case 'gnhhd': // 功能混合度 (新)
+            return [
+                'interpolate',
+                ['linear'],
+                ['get', 'gnhhd'],
+                0, 'rgb(234,247,241)',
+                0.3, 'rgb(215,237,226)',
+                0.5, 'rgb(187,225,206)',
+                0.7, 'rgb(159,212,185)',
+                0.9, 'rgb(136,200,164)',
+                1.1, 'rgb(116,187,144)',
+                1.3, 'rgb(97,170,117)',
+                10, 'rgb(255,255,255)'
+            ];
+        case 'poimd': // POI 密度 (新)
+            return [
+                'interpolate',
+                ['linear'],
+                ['get', 'poimd'],
+                0, 'rgb(238,247,230)',
+                1, 'rgb(222,237,207)',
+                3, 'rgb(198,225,171)',
+                5, 'rgb(175,212,136)',
+                7, 'rgb(153,200,104)',
+                9, 'rgb(133,188,74)',
+                11, 'rgb(109,171,44)',
+                100, 'rgb(255,255,255)'
             ];
         default:
-            return null;
+            console.warn(`未知的属性: ${criteria}，使用默认颜色`);
+            return [
+                'interpolate',
+                ['linear'],
+                ['get', criteria],
+                0, 'rgb(200,200,200)',
+                1, 'rgb(180,180,180)',
+                10, 'rgb(160,160,160)',
+                100, 'rgb(140,140,140)',
+                1000, 'rgb(255,255,255)'
+            ];
     }
 };
 
